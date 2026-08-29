@@ -5,8 +5,9 @@ a **session → turn → provider request** tree. No build step; runs on Node's
 built-in TypeScript support. Node 22.18+.
 
 ```bash
-node src/index.ts        # run the proxy   (npm start)
-node src/index.ts --provider cursor   # ... for the Cursor CLI (`agent`)
+npm start                # run the proxy for Claude Code
+npm run start:cursor     # ... for the Cursor CLI (`agent`)
+npm run dev              # same, with --watch (dev:cursor too)
 npm test                 # node --test, ~1s, no network
 npx tsc --noEmit         # typecheck src/ and test/
 npm run report           # re-render a captured log tree

@@ -8,9 +8,12 @@ captured through this proxy.
 ## Running it
 
 ```bash
-node src/index.ts --provider cursor
+npm run start:cursor                          # or: npm run dev:cursor
 CURSOR_API_ENDPOINT=http://127.0.0.1:8787 agent
 ```
+
+`npm start -- --provider cursor` and `LOGGER_PROVIDER=cursor npm start` do the
+same thing; the script is just the short form.
 
 **You must put the CLI on HTTP/1.1 first.** Add this to
 `~/.cursor/cli-config.json`:

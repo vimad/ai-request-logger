@@ -12,7 +12,9 @@
   },
   "scripts": {
     "start": "node src/index.ts",
+    "start:cursor": "node src/index.ts --provider cursor",
     "dev": "node --watch src/index.ts",
+    "dev:cursor": "node --watch src/index.ts --provider cursor",
     "typecheck": "tsc --noEmit",
     "report": "node src/core/report.ts",
     "test": "node --test \"test/**/*.test.ts\""
