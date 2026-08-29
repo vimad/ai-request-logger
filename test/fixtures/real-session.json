@@ -1,0 +1,318 @@
+[
+  {
+    "loggedAs": "turn-000__background",
+    "note": "captured as turn-000__background",
+    "body": {
+      "model": "claude-opus-5",
+      "max_tokens": 1,
+      "system": "(system prompt trimmed for the fixture)",
+      "tools": [],
+      "messages": [
+        {
+          "role": "user",
+          "content": "quota"
+        }
+      ]
+    }
+  },
+  {
+    "loggedAs": "turn-001__system-reminder-As-you-answer-the-user-s",
+    "note": "captured as turn-001__system-reminder-As-you-answer-the-user-s",
+    "body": {
+      "model": "claude-opus-5",
+      "max_tokens": 64000,
+      "stream": true,
+      "system": "(system prompt trimmed for the fixture)",
+      "tools": [
+        {
+          "name": "Agent"
+        },
+        {
+          "name": "Artifact"
+        },
+        {
+          "name": "AskUserQuestion"
+        }
+      ],
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "<system-reminder>\nAs you answer the user's questions, you can use the following context:\n# claudeMd\n(trimmed for the fixture)\n</system-reminder>"
+            },
+            {
+              "type": "text",
+              "text": "hello"
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": [
+            {
+              "type": "text",
+              "text": "Available agent types for the Agent tool:\n- claude: Catch-all for any task that doesn't fit a more specific agent. FleetView's default when no agent name is typed. (Tools: *)\n- claude-code-guide: Use this agent when the user asks questions (\"Can Claude...\", \"Does Claude...\", \"How do I...\") about: (1 …(trimmed)"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "loggedAs": "turn-001__system-reminder-As-you-answer-the-user-s",
+    "note": "captured as turn-001__system-reminder-As-you-answer-the-user-s",
+    "body": {
+      "model": "claude-opus-5",
+      "max_tokens": 64000,
+      "stream": true,
+      "system": "(system prompt trimmed for the fixture)",
+      "tools": [],
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "<session>\ncan you summarise readme in one short sentence\n</session>\n\nWrite the title in the predominant language of the session — a stray word or code token in another language doesn't change it, and neither does the English of these instructions."
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "loggedAs": "turn-002__can-you-summarise-readme-in-one-short-se",
+    "note": "captured as turn-002__can-you-summarise-readme-in-one-short-se",
+    "body": {
+      "model": "claude-opus-5",
+      "max_tokens": 64000,
+      "stream": true,
+      "system": "(system prompt trimmed for the fixture)",
+      "tools": [
+        {
+          "name": "Agent"
+        },
+        {
+          "name": "Artifact"
+        },
+        {
+          "name": "AskUserQuestion"
+        }
+      ],
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "<system-reminder>\nAs you answer the user's questions, you can use the following context:\n# claudeMd\n(trimmed for the fixture)\n</system-reminder>"
+            },
+            {
+              "type": "text",
+              "text": "hello"
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": "Available agent types for the Agent tool:\n- claude: Catch-all for any task that doesn't fit a more specific agent. FleetView's default when no agent name is typed. (Tools: *)\n- claude-code-guide: Use this agent when the user asks questions (\"Can Claude...\", \"Does Claude...\", \"How do I...\") about: (1 …(trimmed)"
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Hello! What would you like to work on in my-planner today?"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "can you summarise readme in one short sentence"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "loggedAs": "turn-003__can-you-summarise-readme-in-one-short-se",
+    "note": "captured as turn-003__can-you-summarise-readme-in-one-short-se",
+    "body": {
+      "model": "claude-opus-5",
+      "max_tokens": 64000,
+      "stream": true,
+      "system": "(system prompt trimmed for the fixture)",
+      "tools": [
+        {
+          "name": "Agent"
+        },
+        {
+          "name": "Artifact"
+        },
+        {
+          "name": "AskUserQuestion"
+        }
+      ],
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "<system-reminder>\nAs you answer the user's questions, you can use the following context:\n# claudeMd\n(trimmed for the fixture)\n</system-reminder>"
+            },
+            {
+              "type": "text",
+              "text": "hello"
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": "Available agent types for the Agent tool:\n- claude: Catch-all for any task that doesn't fit a more specific agent. FleetView's default when no agent name is typed. (Tools: *)\n- claude-code-guide: Use this agent when the user asks questions (\"Can Claude...\", \"Does Claude...\", \"How do I...\") about: (1 …(trimmed)"
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Hello! What would you like to work on in my-planner today?"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": "can you summarise readme in one short sentence"
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "I'll read the README first."
+            },
+            {
+              "type": "tool_use",
+              "id": "toolu_014CT7YLMLsMKQChGiafXo54",
+              "name": "Bash",
+              "input": {
+                "command": "ls /path/to/project/ | head -30; echo \"---\"; cat /path/to/project/README.md 2>/dev/null | head -60",
+                "description": "List repo root and read README"
+              }
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "tool_result",
+              "tool_use_id": "toolu_014CT7YLMLsMKQChGiafXo54",
+              "content": "(tool output trimmed)"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "loggedAs": "turn-004__SUGGESTION-MODE-Suggest-what-the-user-mi",
+    "note": "captured as turn-004__SUGGESTION-MODE-Suggest-what-the-user-mi",
+    "body": {
+      "model": "claude-opus-5",
+      "max_tokens": 64000,
+      "stream": true,
+      "system": "(system prompt trimmed for the fixture)",
+      "tools": [
+        {
+          "name": "Agent"
+        },
+        {
+          "name": "Artifact"
+        },
+        {
+          "name": "AskUserQuestion"
+        }
+      ],
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "<system-reminder>\nAs you answer the user's questions, you can use the following context:\n# claudeMd\n(trimmed for the fixture)\n</system-reminder>"
+            },
+            {
+              "type": "text",
+              "text": "hello"
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": "Available agent types for the Agent tool:\n- claude: Catch-all for any task that doesn't fit a more specific agent. FleetView's default when no agent name is typed. (Tools: *)\n- claude-code-guide: Use this agent when the user asks questions (\"Can Claude...\", \"Does Claude...\", \"How do I...\") about: (1 …(trimmed)"
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Hello! What would you like to work on in my-planner today?"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": "can you summarise readme in one short sentence"
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "I'll read the README first."
+            },
+            {
+              "type": "tool_use",
+              "id": "toolu_014CT7YLMLsMKQChGiafXo54",
+              "name": "Bash",
+              "input": {
+                "command": "ls /path/to/project/ | head -30; echo \"---\"; cat /path/to/project/README.md 2>/dev/null | head -60",
+                "description": "List repo root and read README"
+              }
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "tool_result",
+              "tool_use_id": "toolu_014CT7YLMLsMKQChGiafXo54",
+              "content": "(tool output trimmed)"
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "The README describes my-planner as a pnpm-workspace scaffold for a React + Express + MongoDB app (with an optional Tauri macOS wrapper) and how to set it up and run it locally.\n\nNote it's still written as generic \"scaffolding\" — it doesn't mention the actual planner features that CLAUDE.md describes …(trimmed)"
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": "[SUGGESTION MODE: Suggest what the user might naturally type next into Claude Code.]\n\nFIRST: Look at the user's recent messages and original request.\n\nYour job is to predict what THEY would type - not what you think they should do.\n\nTHE TEST: Would they think \"I was just about to type that\"?\n\nEXAMPL …(trimmed)"
+        }
+      ]
+    }
+  }
+]

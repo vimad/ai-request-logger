@@ -1,0 +1,57 @@
+# Captured traffic.
+#
+# This is the important one. Everything the proxy writes here is the verbatim
+# content of your sessions: prompts, file contents, tool output, and the shape
+# of your system prompt. Credential headers are hashed rather than stored, but
+# the bodies are not redacted at all. Never commit it.
+log/
+logs/
+*.jsonl
+
+# An alternate log directory passed via --log-dir or LOGGER_LOG_DIR is NOT
+# covered by the rules above. If you point the proxy somewhere else inside the
+# repo, add that path here.
+
+# Dependencies. The project has none at runtime, but `npm i -D typescript
+# @types/node` is the usual way to make `npm run typecheck` work.
+node_modules/
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Build and tooling output. Nothing is compiled today - Node strips the types
+# at run time - but tsc leaves these behind if anyone points it at the source.
+dist/
+build/
+*.tsbuildinfo
+coverage/
+.nyc_output/
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Editors
+.idea/
+.vscode/
+!.vscode/extensions.json
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows / Linux desktop leftovers
+Thumbs.db
+Desktop.ini
+.directory
+
+# Scratch space
+tmp/
+temp/
+*.local
