@@ -24,6 +24,15 @@ export const cursor: Provider = {
   // The CLI takes `--endpoint`; this is the matching variable, for the banner.
   baseUrlEnvVar: "CURSOR_API_ENDPOINT",
   clientCommand: "agent",
+  banner: {
+    setup:
+      'First put the CLI on HTTP/1.1, or it will bypass the proxy silently:\n' +
+      '  ~/.cursor/cli-config.json -> { "network": { "useHttp1ForAgent": true } }',
+    credentials:
+      "Your Cursor login is untouched - credentials are forwarded verbatim,\n" +
+      "  so `agent login`, API keys and team accounts all keep working.",
+    backgroundTurn: "the agent run stream, opened before the first prompt",
+  },
 
   isInferenceEndpoint: (path) => RUN_PATH.test(path) || APPEND_PATH.test(path),
 

@@ -21,6 +21,13 @@ export const claude: Provider = {
   defaultUpstream: "https://api.anthropic.com",
   baseUrlEnvVar: "ANTHROPIC_BASE_URL",
   clientCommand: "claude",
+  banner: {
+    projectConfig: ".claude/settings.local.json",
+    credentials:
+      "Your existing login is untouched - credentials are forwarded verbatim,\n" +
+      "  so /login, Pro/Max OAuth, API keys and Bedrock/Vertex all keep working.",
+    backgroundTurn: "titles, topic detection, compaction",
+  },
 
   isInferenceEndpoint(path: string): boolean {
     return MESSAGES_PATH.test(path);

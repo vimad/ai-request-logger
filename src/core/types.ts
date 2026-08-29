@@ -113,6 +113,22 @@ export interface DescribeInput {
  */
 export type StreamFraming = "sse" | "binary" | "none";
 
+/**
+ * The parts of the startup banner only the provider can fill in. The core
+ * prints the shape; anything a provider leaves unset is left out entirely,
+ * because a banner that guesses is worse than a shorter one.
+ */
+export interface BannerNotes {
+  /** Something the user must do first, or the client will not reach the proxy. */
+  setup?: string;
+  /** A project-scoped config file that can carry the base-URL variable. */
+  projectConfig?: string;
+  /** What happens to the user's existing credentials. */
+  credentials?: string;
+  /** What this provider files under `turn-000__background/`. */
+  backgroundTurn?: string;
+}
+
 export interface Provider {
   /** Stable id; recorded in every log file so reports can re-render offline. */
   id: string;
@@ -124,6 +140,9 @@ export interface Provider {
   baseUrlEnvVar: string;
   /** The command the user runs to start this client, for the banner. */
   clientCommand: string;
+  /** Provider-specific banner lines. Every field is optional; omitted ones
+   *  drop their section rather than printing something untrue. */
+  banner?: BannerNotes;
   /** True for paths that carry a prompt worth structuring (vs. plumbing). */
   isInferenceEndpoint(path: string): boolean;
   /** Read a request body into a shape, or undefined if it is not describable. */

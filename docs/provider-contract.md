@@ -11,6 +11,7 @@ export interface Provider {
   defaultUpstream: string;
   baseUrlEnvVar: string;
   clientCommand: string;
+  banner?: BannerNotes;
 
   isInferenceEndpoint(path: string): boolean;
   describeRequest(input: DescribeInput): RequestShape | undefined;
@@ -66,6 +67,32 @@ The command the user types to start this client. Banner only — it is what make
 the copy-paste line say `agent` rather than `claude`.
 
 > **Claude:** `"claude"` · **Cursor:** `"agent"`
+
+## `banner`  *(optional)*
+
+The parts of the startup banner only you can fill in. The core prints the
+shape; **anything you leave unset drops its section**, because a banner that
+guesses is worse than a shorter one.
+
+```ts
+interface BannerNotes {
+  setup?: string;          // something the user must do first
+  projectConfig?: string;  // a project-scoped file that can carry the variable
+  credentials?: string;    // what happens to their existing login
+  backgroundTurn?: string; // what you file under turn-000__background/
+}
+```
+
+> **Claude:** a `.claude/settings.local.json` env block, and turn 0 holds
+> "titles, topic detection, compaction".
+>
+> **Cursor:** `setup` warns that the CLI needs `useHttp1ForAgent` or it bypasses
+> the proxy silently; there is no per-project config file, so that section is
+> simply absent.
+
+If you find yourself wanting to special-case your provider inside
+[`src/index.ts`](../src/index.ts), add a field here instead — the banner is the
+one place vendor text kept leaking back into the generic half.
 
 ---
 

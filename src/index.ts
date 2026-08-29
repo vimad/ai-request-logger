@@ -24,6 +24,7 @@ server.listen(cfg.port, cfg.host, () => {
   const rel = relative(process.cwd(), cfg.logDir) || cfg.logDir;
   const envVar = provider.baseUrlEnvVar;
   const client = provider.clientCommand;
+  const notes = provider.banner ?? {};
   const others = providers.map((p) => p.id).filter((id) => id !== provider.id);
 
   console.log("");
@@ -37,24 +38,26 @@ server.listen(cfg.port, cfg.host, () => {
     console.log(c.dim(`  others      ${others.join(", ")}   (--provider <id>)`));
   }
   console.log("");
+  if (notes.setup) {
+    console.log(c.bold("  Before you start"));
+    console.log(c.dim(`  ${notes.setup}`));
+    console.log("");
+  }
   console.log(c.bold("  Point your client at it"));
   console.log(c.dim("  ── one-off, in another terminal ────────────────────────────"));
-  console.log(`    ${c.green(`${envVar}=${base} claude`)}`);
+  console.log(`    ${c.green(`${envVar}=${base} ${client}`)}`);
   console.log("");
   console.log(c.dim("  ── for the whole shell session ─────────────────────────────"));
   console.log(`    ${c.green(`export ${envVar}=${base}`)}`);
   console.log(`    ${c.green(client)}`);
-  console.log("");
-  console.log(c.dim("  ── persist for one project (.claude/settings.local.json) ───"));
-  console.log(c.green(`    { "env": { "${envVar}": "${base}" } }`));
+  if (notes.projectConfig) {
+    console.log("");
+    console.log(c.dim(`  ── persist for one project (${notes.projectConfig}) ───`));
+    console.log(c.green(`    { "env": { "${envVar}": "${base}" } }`));
+  }
   console.log("");
   console.log(c.dim(`  Stop logging: unset ${envVar} (or drop the env block).`));
-  console.log(
-    c.dim(
-      "  Your existing login is untouched - credentials are forwarded verbatim,\n" +
-        "  so /login, Pro/Max OAuth, API keys and Bedrock/Vertex all keep working.",
-    ),
-  );
+  if (notes.credentials) console.log(c.dim(`  ${notes.credentials}`));
   console.log("");
   console.log(c.bold("  Log layout"));
   console.log(
@@ -71,7 +74,7 @@ server.listen(cfg.port, cfg.host, () => {
         "                                        the previous request\n" +
         "          request.json / response.json  the raw capture\n" +
         "          stream.jsonl                  one line per SSE event\n" +
-        "      turn-000__background/             titles, topic detection, compaction\n" +
+        `      turn-000__background/             ${notes.backgroundTurn ?? "calls with no turn of their own"}\n` +
         `    ${rel}/index.jsonl                    one line per provider request`,
     ),
   );
