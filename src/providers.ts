@@ -4,8 +4,9 @@
  */
 import type { Provider } from "./core/types.ts";
 import { claude } from "./claude/index.ts";
+import { cursor } from "./cursor/index.ts";
 
-export const providers: Provider[] = [claude];
+export const providers: Provider[] = [claude, cursor];
 
 export const defaultProvider = claude;
 

@@ -92,12 +92,26 @@ export interface ProviderRenderer {
 }
 
 export interface DescribeInput {
+  /** Parsed JSON, or undefined when the body did not claim to be JSON. */
   body: unknown;
+  /** The request body verbatim, for providers speaking a binary wire format. */
+  bodyBuf: Buffer;
   headers: Record<string, string>;
   path: string;
   /** Result of this provider's own `isInferenceEndpoint(path)`. */
   isInference: boolean;
 }
+
+/**
+ * How the core should turn a streamed response body into events.
+ *
+ * `sse`    - blank-line framed `text/event-stream` (the default).
+ * `binary` - some other framing; the core buffers its decoded copy and hands
+ *            the whole body to `decodeStream` once the response completes.
+ *            The relay to the client stays unbuffered either way.
+ * `none`   - not a stream; parse the body as JSON/text.
+ */
+export type StreamFraming = "sse" | "binary" | "none";
 
 export interface Provider {
   /** Stable id; recorded in every log file so reports can re-render offline. */
@@ -108,10 +122,20 @@ export interface Provider {
   defaultUpstream: string;
   /** Client-side env var that points the tool at this proxy, for the banner. */
   baseUrlEnvVar: string;
+  /** The command the user runs to start this client, for the banner. */
+  clientCommand: string;
   /** True for paths that carry a prompt worth structuring (vs. plumbing). */
   isInferenceEndpoint(path: string): boolean;
   /** Read a request body into a shape, or undefined if it is not describable. */
   describeRequest(input: DescribeInput): RequestShape | undefined;
+  /**
+   * How to frame this response body into events. Defaults to `sse` when the
+   * content-type says `text/event-stream` and `none` otherwise, which is what
+   * a provider that only speaks JSON + SSE wants.
+   */
+  streamFraming?(headers: Record<string, string>): StreamFraming;
+  /** Frame a `binary` response body into events. Required with that framing. */
+  decodeStream?(body: Buffer, headers: Record<string, string>): SseEvent[];
   /** Rebuild the final message object from a stream of SSE events. */
   reconstructMessage(events: SseEvent[]): Record<string, unknown> | undefined;
   /** Pull usage, stop reason and tool calls out of a reply. */

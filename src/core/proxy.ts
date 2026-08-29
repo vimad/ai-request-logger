@@ -7,12 +7,17 @@ import { Agent as HttpAgent, type IncomingMessage, type ServerResponse } from "n
 import { Agent as HttpsAgent, request as httpsRequest } from "node:https";
 import { request as httpRequest } from "node:http";
 import { PassThrough, type Duplex } from "node:stream";
+import { StringDecoder } from "node:string_decoder";
 import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
+import { encodeBody } from "./bytes.ts";
 import type { Config } from "./config.ts";
 import { LogStore, type RequestMeta } from "./logger.ts";
-import { SseParser } from "./sse.ts";
-import type { ResponseFacts } from "./types.ts";
+import { SseParser, type SseEvent } from "./sse.ts";
+import type { ResponseFacts, StreamFraming } from "./types.ts";
 import { since, tryParseJson } from "./util.ts";
+
+/** Cap on the log's own copy of a response body. The relay is never capped. */
+const BODY_CAPTURE_LIMIT = 8 * 1024 * 1024;
 
 /**
  * Hop-by-hop headers are meaningful only for a single connection and must not
@@ -61,13 +66,13 @@ export function createHandler({ cfg, store, onLine }: ProxyDeps) {
       const started = process.hrtime.bigint();
       const url = req.url ?? "/";
       const headers = normalizeHeaders(req.headers);
-      const bodyText = bodyBuf.toString("utf8");
       const parsedBody = headers["content-type"]?.includes("json")
-        ? tryParseJson(bodyText)
+        ? tryParseJson(bodyBuf.toString("utf8"))
         : undefined;
 
       const shape = provider.describeRequest({
         body: parsedBody,
+        bodyBuf,
         headers,
         path: url,
         isInference: provider.isInferenceEndpoint(url),
@@ -82,7 +87,7 @@ export function createHandler({ cfg, store, onLine }: ProxyDeps) {
         url: new URL(targetPath, cfg.upstream).toString(),
         remote: req.socket.remoteAddress ?? "?",
         headers,
-        bodyText,
+        bodyBuf,
         body: parsedBody,
         shape,
       };
@@ -124,19 +129,33 @@ export function createHandler({ cfg, store, onLine }: ProxyDeps) {
           // stream that goes quiet, and they count on pings arriving live.
           res.flushHeaders();
 
-          const contentType = String(up.headers["content-type"] ?? "");
-          const isSse = contentType.includes("text/event-stream");
+          const upHeaders = normalizeHeaders(up.headers);
+          const framing: StreamFraming = provider.streamFraming
+            ? provider.streamFraming(upHeaders)
+            : String(up.headers["content-type"] ?? "").includes("text/event-stream")
+              ? "sse"
+              : "none";
           const sink = decoderFor(String(up.headers["content-encoding"] ?? ""));
           const parser = new SseParser();
-          let textBody = "";
+          // SSE is framed on text, so decode incrementally to keep a multi-byte
+          // character split across two chunks intact. Every other framing keeps
+          // the bytes themselves, because a lossy round trip cannot be undone.
+          const decoder = new StringDecoder("utf8");
+          const resChunks: Buffer[] = [];
+          let captured = 0;
           let ttfb: number | undefined;
           let firstByte = true;
 
           sink.on("data", (buf: Buffer) => {
-            const text = buf.toString("utf8");
-            entry.writeRaw(text);
-            if (isSse) entry.writeEvents(parser.push(text, since(started)));
-            else if (textBody.length < 8 * 1024 * 1024) textBody += text;
+            entry.writeRaw(buf);
+            if (framing === "sse") {
+              entry.writeEvents(parser.push(decoder.write(buf), since(started)));
+              return;
+            }
+            if (captured < BODY_CAPTURE_LIMIT) {
+              resChunks.push(buf);
+              captured += buf.length;
+            }
           });
           sink.on("error", () => {});
 
@@ -167,9 +186,24 @@ export function createHandler({ cfg, store, onLine }: ProxyDeps) {
           function finish(): void {
             if (finished) return;
             finished = true;
-            if (isSse) entry.writeEvents(parser.end(since(started)));
-            const message = isSse ? provider.reconstructMessage(parser.events) : undefined;
-            const body = isSse ? undefined : (tryParseJson(textBody) ?? textBody);
+            let events: SseEvent[] = [];
+            if (framing === "sse") {
+              const tail = decoder.end();
+              if (tail) entry.writeEvents(parser.push(tail, since(started)));
+              entry.writeEvents(parser.end(since(started)));
+              events = parser.events;
+            } else if (framing === "binary") {
+              try {
+                events = provider.decodeStream?.(Buffer.concat(resChunks), upHeaders) ?? [];
+              } catch {
+                // A truncated or unknown frame must not cost us the capture.
+              }
+              entry.writeEvents(events);
+            }
+            const streamed = framing !== "none";
+            const message = streamed ? provider.reconstructMessage(events) : undefined;
+            const raw = streamed ? undefined : Buffer.concat(resChunks);
+            const body = raw && (tryParseJson(raw.toString("utf8")) ?? encodeBody(raw));
             const facts = provider.responseFacts(message, body);
             const durationMs = since(started);
             void entry
@@ -178,7 +212,7 @@ export function createHandler({ cfg, store, onLine }: ProxyDeps) {
                 headers: up.headers,
                 body,
                 message,
-                eventCount: isSse ? parser.events.length : undefined,
+                eventCount: streamed ? events.length : undefined,
                 ttfbMs: ttfb,
                 durationMs,
                 ...facts,

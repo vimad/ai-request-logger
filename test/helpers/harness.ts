@@ -5,24 +5,29 @@ import type { Config } from "../../src/core/config.ts";
 import { createProxyServer } from "../../src/core/server.ts";
 import type { Provider } from "../../src/core/types.ts";
 import { claude } from "../../src/claude/index.ts";
-// The proxy needs *some* upstream to talk to. The Claude mock is the only one
-// there is today; a second provider would bring its own and pass it in here.
+// The proxy needs *some* upstream to talk to. Each provider brings its own
+// mock and passes it in as `startUpstream`; Claude's is the default.
 import { startMockUpstream, type MockOptions, type MockUpstream } from "../claude/upstream.ts";
+
+/** Any provider's mock upstream, as the harness needs to see it. */
+export type StartUpstream = (opts: MockOptions) => Promise<MockUpstream>;
 
 export interface Harness {
   base: string;
   logDir: string;
   upstream: MockUpstream;
-  /** POST a Messages API request through the proxy. */
+  /** POST a JSON request through the proxy. */
   send: (body: unknown, headers?: Record<string, string>, path?: string) => Promise<Response>;
+  /** POST raw bytes through the proxy, for providers with a binary wire format. */
+  sendRaw: (path: string, body: Buffer, headers?: Record<string, string>) => Promise<Response>;
   close: () => Promise<void>;
 }
 
 /** Proxy + mock upstream + a throwaway log directory, all on ephemeral ports. */
 export async function startHarness(
-  opts: MockOptions & { provider?: Provider } = {},
+  opts: MockOptions & { provider?: Provider; startUpstream?: StartUpstream } = {},
 ): Promise<Harness> {
-  const upstream = await startMockUpstream(opts);
+  const upstream = await (opts.startUpstream ?? startMockUpstream)(opts);
   const logDir = mkdtempSync(join(tmpdir(), "arl-test-"));
 
   const cfg: Config = {
@@ -55,6 +60,12 @@ export async function startHarness(
           ...headers,
         },
         body: JSON.stringify(body),
+      }),
+    sendRaw: (path, body, headers = {}) =>
+      fetch(base + path, {
+        method: "POST",
+        headers: { "content-type": "application/proto", ...headers },
+        body: new Uint8Array(body),
       }),
     close: async () => {
       await new Promise<void>((resolve) => server.close(() => resolve()));

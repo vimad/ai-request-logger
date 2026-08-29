@@ -10,9 +10,12 @@ export interface Provider {
   label: string;
   defaultUpstream: string;
   baseUrlEnvVar: string;
+  clientCommand: string;
 
   isInferenceEndpoint(path: string): boolean;
   describeRequest(input: DescribeInput): RequestShape | undefined;
+  streamFraming?(headers): "sse" | "binary" | "none";
+  decodeStream?(body: Buffer, headers): SseEvent[];
   reconstructMessage(events: SseEvent[]): Record<string, unknown> | undefined;
   responseFacts(message, body): ResponseFacts;
 
@@ -55,6 +58,14 @@ The env var the *client* reads to find this proxy. Used only to print a correct
 copy-paste line in the banner.
 
 > **Claude:** `"ANTHROPIC_BASE_URL"`
+> **Cursor:** `"CURSOR_API_ENDPOINT"`
+
+## `clientCommand`
+
+The command the user types to start this client. Banner only — it is what makes
+the copy-paste line say `agent` rather than `claude`.
+
+> **Claude:** `"claude"` · **Cursor:** `"agent"`
 
 ---
 
@@ -84,11 +95,17 @@ here.
 ```ts
 interface DescribeInput {
   body: unknown;      // parsed JSON, or undefined if not JSON
+  bodyBuf: Buffer;    // the request body verbatim
   headers: Record<string, string>;   // lowercased
   path: string;
   isInference: boolean;              // your own isInferenceEndpoint(path)
 }
 ```
+
+`body` is only populated when `content-type` contains `json`. A provider with a
+binary wire format reads `bodyBuf` instead — that is what
+[`src/cursor/turns.ts`](../src/cursor/turns.ts) does, gunzipping it and walking
+it as protobuf.
 
 Return `undefined` when the body is not something you recognise. That is not an
 error: the request is still proxied and still captured, it just lands in
@@ -141,6 +158,36 @@ This is where the subtle bugs live. A turn key must be:
 > still logged, just folded into the turn in flight instead of opening its own.
 
 ---
+
+## `streamFraming(headers): "sse" | "binary" | "none"`  *(optional)*
+
+How the core should read its copy of the response body. Omit it and the core
+uses `sse` when `content-type` says `text/event-stream` and `none` otherwise,
+which is what a JSON+SSE provider wants.
+
+Return `binary` when the body is framed some other way. The core then buffers
+its **own copy** and hands the whole thing to `decodeStream` at the end; the
+relay to the client stays unbuffered either way, so a streaming client still
+sees bytes the moment they arrive.
+
+> **Cursor:** `binary` for the agent stream, which announces
+> `text/event-stream` and then sends Connect envelopes rather than `data:`
+> lines. Without this the core's SSE parser would find nothing and
+> `response.json` would have no body.
+
+## `decodeStream(body, headers): SseEvent[]`  *(required with `binary`)*
+
+Frame a whole response body into events. Same `SseEvent` shape the SSE parser
+produces, so `stream.jsonl` and `reconstructMessage` do not care which framing
+produced them.
+
+Because the body arrives all at once there is no per-frame arrival time; set
+`at` to 0 and carry the ordering in the data, as Cursor does with its sequence
+numbers.
+
+> **Cursor:** splits Connect envelopes, gunzips any frame flagged compressed,
+> and walks each payload as protobuf. A truncated tail becomes a `truncated`
+> event rather than an exception — a cancelled run is normal traffic.
 
 ## `reconstructMessage(events): object | undefined`
 

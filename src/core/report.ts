@@ -2,7 +2,7 @@
 /**
  * Re-parses a log tree into Markdown:
  *
- *   node src/core/report.ts [logDir] [--provider=claude]
+ *   node src/core/report.ts [logDir] [--provider=<id>]
  *
  * The proxy already writes these files as it runs; this regenerates them for
  * logs captured earlier, or after you change a renderer. Each log records the

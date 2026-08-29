@@ -16,7 +16,7 @@
                                          │  implemented by
                     ┌────────────────────┼────────────────────┐
                     ▼                    ▼                    ▼
-              src/claude/         src/cursor/  (yours)   src/codex/  (yours)
+              src/claude/           src/cursor/         src/codex/  (yours)
 ```
 
 `src/core/` is a transparent reverse proxy that happens to keep a very
@@ -46,6 +46,13 @@ src/
     turns.ts            turn detection: session ids, subagents, reminders
     messages.ts         SSE deltas → one message; usage / stop reason / tool calls
     render.ts           Anthropic content blocks, the token table, request.md
+  cursor/               ← the second provider: a binary wire format
+    index.ts            the Provider object
+    turns.ts            session identity across two endpoints; prompt = turn
+    messages.ts         Connect frames → transcript, usage, tool calls
+    render.ts           the transcript and the context-window table
+    protobuf.ts         a schema-free protobuf reader
+    connect.ts          Connect envelope framing and per-frame gzip
 ```
 
 ★ Read `src/core/types.ts` first. It is short, and it is the whole agreement.
@@ -57,6 +64,8 @@ Follow [`src/core/proxy.ts`](../src/core/proxy.ts). Provider calls are marked �
 1. **Buffer the request body.** The whole body is read before forwarding, because
    the log wants a parsed copy and the upstream wants a byte-exact one.
 2. **Parse if it claims to be JSON.** Only when `content-type` contains `json`.
+   The raw bytes go through as `bodyBuf` either way, so a provider with a binary
+   wire format has something to read.
 3. ▸ **`isInferenceEndpoint(url)`** — does this path carry a prompt, or is it
    plumbing (token counting, a warm-up ping)?
 4. ▸ **`describeRequest({ body, headers, path, isInference })`** → a
@@ -70,7 +79,10 @@ Follow [`src/core/proxy.ts`](../src/core/proxy.ts). Provider calls are marked �
    headers; `host` is rewritten. The credential goes through untouched.
 7. **Relay the response unbuffered**, teeing a decompressed copy into a sink.
    Streaming clients abort a stream that goes quiet, so nothing is held back.
-8. ▸ **`reconstructMessage(events)`** — for SSE replies, rebuild the single
+   ▸ **`streamFraming(headers)`** decides how that copy is read: `sse` (the
+   default), `binary` for another framing, or `none`. ▸ **`decodeStream(body,
+   headers)`** turns a `binary` body into events once the response completes.
+8. ▸ **`reconstructMessage(events)`** — for streamed replies, rebuild the single
    message object a non-streaming call would have returned.
 9. ▸ **`responseFacts(message, body)`** → `{ usage, stopReason, toolCalls }`,
    the only response facts the core rolls up.
@@ -129,8 +141,10 @@ totals stop adding up and the test fails.
 | --- | --- |
 | Which bytes go on the wire | core — always verbatim |
 | Which headers are dropped | core — RFC 9110 hop-by-hop only |
-| Whether a response is SSE | core — from `content-type` |
-| Where an event boundary is | core — `sse.ts`, blank-line framing |
+| Whether a response is a stream | **provider** — `streamFraming`, defaulting to `content-type` |
+| Where an SSE event boundary is | core — `sse.ts`, blank-line framing |
+| Where any other frame boundary is | **provider** — `decodeStream` |
+| That a body reaches disk byte-exact | core — `bytes.ts`, text or base64 |
 | What an event *means* | **provider** — `reconstructMessage` |
 | Whether a path carries a prompt | **provider** — `isInferenceEndpoint` |
 | Which session a request belongs to | **provider** — `shape.sessionId` |

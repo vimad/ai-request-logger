@@ -20,6 +20,7 @@ export const claude: Provider = {
   label: "Claude Code / Anthropic Messages API",
   defaultUpstream: "https://api.anthropic.com",
   baseUrlEnvVar: "ANTHROPIC_BASE_URL",
+  clientCommand: "claude",
 
   isInferenceEndpoint(path: string): boolean {
     return MESSAGES_PATH.test(path);

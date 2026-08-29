@@ -1,7 +1,9 @@
 # Adding a provider
 
-The worked example throughout is a hypothetical `cursor` harness. Mirror
-[`src/claude/`](../src/claude/) — it is laid out the way a provider should be.
+Mirror [`src/claude/`](../src/claude/) — it is laid out the way a provider
+should be. The examples below use `cursor` as the name; that provider is now
+real, so read [cursor.md](./cursor.md) alongside this for what a second,
+awkwardly-shaped harness actually took.
 
 ## 0. Capture real traffic first
 
@@ -14,8 +16,8 @@ Run the proxy with **no provider written yet**. Unrecognised traffic is still
 captured verbatim:
 
 ```bash
-node src/index.ts --upstream https://api.cursor.sh --log-dir /tmp/cursor-capture
-CURSOR_BASE_URL=http://127.0.0.1:8787 cursor
+node src/index.ts --upstream https://api2.cursor.sh --log-dir /tmp/cursor-capture
+CURSOR_API_ENDPOINT=http://127.0.0.1:8787 agent
 ```
 
 Then read `/tmp/cursor-capture/**/request.json`. Answer these five questions
@@ -28,6 +30,17 @@ before writing any code:
 4. How is a subagent / sub-task marked, if at all?
 5. What does the streaming protocol look like, and what does usage look like?
 
+All five had surprising answers for Cursor. The session is named by neither
+endpoint, the prompt travels on a different call from the reply, the stream
+claims a content-type it does not honour, and "usage" is a context-window
+reading rather than a billing split. **Do not assume your harness resembles the
+Anthropic Messages API** — that assumption is what step 0 exists to break.
+
+Bodies reach disk byte-exact: text when the bytes are valid UTF-8, and
+`{ "__binary": true, "encoding": "base64", … }` when they are not. So a
+protobuf or gzipped capture is fully recoverable with
+`decodeBody()` from [`core/bytes.ts`](../src/core/bytes.ts).
+
 ## 1. Scaffold
 
 ```
@@ -37,6 +50,10 @@ src/cursor/
   messages.ts    reconstructMessage + responseFacts
   render.ts      tokens, usageTable, request  (the ProviderRenderer)
 ```
+
+A binary protocol earns more files — Cursor adds `protobuf.ts` and `connect.ts`
+for the wire format itself, kept separate from anything that knows what a turn
+is.
 
 Splitting into four files is convention, not a requirement — but it keeps each
 piece independently testable, which is what [testing.md](./testing.md) assumes.
@@ -63,6 +80,10 @@ return {
 pull out usage, stop reason and tool calls. Both must tolerate a truncated
 stream — a cancelled request is normal traffic, not an error case.
 
+If your reply is not SSE, add `streamFraming()` returning `"binary"` and a
+`decodeStream(body, headers)` that frames it. See
+[provider-contract.md](./provider-contract.md#streamframingheaders-sse--binary--none-optional).
+
 ## 4. Write `render.ts`
 
 Export a `renderer: ProviderRenderer`. Build `request.md` out of the atoms in
@@ -79,21 +100,21 @@ wrote — which is exactly what the e2e test checks.
 import type { DescribeInput, Provider, RequestShape } from "../core/types.ts";
 import { reconstructMessage, responseFacts } from "./messages.ts";
 import { renderer } from "./render.ts";
-import { describeRequest, type CursorRequestBody } from "./turns.ts";
+import { describeRequest } from "./turns.ts";
 
-const PROMPT_PATH = /\/v1\/chat(?:\?|$)/;
+const PROMPT_PATH = /\/agent\.v1\.AgentService\/RunSSE(?:\?|$)/;
 
 export const cursor: Provider = {
   id: "cursor",
   label: "Cursor",
   defaultUpstream: "https://api.cursor.sh",
-  baseUrlEnvVar: "CURSOR_BASE_URL",
+  baseUrlEnvVar: "CURSOR_API_ENDPOINT",
+  clientCommand: "agent",
 
   isInferenceEndpoint: (path) => PROMPT_PATH.test(path),
 
-  describeRequest({ body, headers, isInference }: DescribeInput): RequestShape | undefined {
-    if (!body || typeof body !== "object") return undefined;
-    return describeRequest(body as CursorRequestBody, headers, isInference);
+  describeRequest(input: DescribeInput): RequestShape | undefined {
+    return describeRequest(input);
   },
 
   reconstructMessage,
@@ -124,8 +145,11 @@ See [testing.md](./testing.md). The short version: copy
 protocol, then reuse the shared harness:
 
 ```ts
-const h = await startHarness({ provider: cursor });
+const h = await startHarness({ provider: cursor, startUpstream: startMockUpstream });
 ```
+
+`sendRaw(path, buffer, headers)` posts bytes, for a provider whose bodies are
+not JSON.
 
 ## 8. Run it
 
@@ -150,10 +174,12 @@ registered providers.
 - [ ] Background/self-issued calls are `aux`, not `main`
 - [ ] Subagent requests set `agentId`
 - [ ] Vendor-only fields are in `detail`, not bolted onto `RequestShape`
+- [ ] A stream that is not SSE declares `streamFraming` and `decodeStream`
+- [ ] Nothing secret becomes a directory name — hash it if you key on a credential
 - [ ] `tokens()` tolerates `undefined` and unknown shapes
 - [ ] `renderer.request()` reads only its two arguments
 - [ ] Registered in `src/providers.ts`
-- [ ] `grep -rn "cursor" src/core/` prints nothing
+- [ ] `grep -rn "<your id>" src/core/` prints nothing
 - [ ] `npm test` and `npx tsc --noEmit` are clean
 
 ## Anti-patterns

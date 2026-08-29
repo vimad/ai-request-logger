@@ -33,6 +33,14 @@ test/
     upstream.ts         the mock Anthropic server
     fixtures/
       real-session.json request bodies captured from a real session
+  cursor/
+    wire.test.ts        protobuf reading and Connect envelope framing
+    turns.test.ts       session identity across two endpoints; prompt = turn
+    messages.test.ts    frame decoding, transcript reconstruction, usage
+    render.test.ts      request.md and the context-window table
+    e2e.test.ts         a whole CLI session through the proxy
+    upstream.ts         the mock Cursor server
+    encode.ts           protobuf/Connect encoders for building wire fixtures
   helpers/
     harness.ts          proxy + mock upstream + throwaway log dir
 ```
@@ -107,6 +115,11 @@ just handed back a tool result, which is what makes the e2e tool loop terminate.
 Write the equivalent for your protocol. Keep the same shape — an options bag, a
 `seen` array, `origin` and `close()` — and the shared harness will accept it.
 
+[`test/cursor/upstream.ts`](../test/cursor/upstream.ts) is the second one, and
+covers the parts of Cursor's protocol that bite: a response that declares
+`text/event-stream` and then sends Connect envelopes, a frame gzipped on its
+own, and unary `application/proto` replies for plumbing.
+
 ## Reusing the harness
 
 [`test/helpers/harness.ts`](../test/helpers/harness.ts) starts the real proxy
@@ -114,12 +127,11 @@ against a mock upstream on ephemeral ports with a temp log dir, and hands back
 `send()`, `logDir`, `upstream.seen` and `close()`. It already takes a provider:
 
 ```ts
-const h = await startHarness({ provider: cursor });
+const h = await startHarness({ provider: cursor, startUpstream: startMockUpstream });
 ```
 
-Today it imports the Claude mock directly, because that is the only one that
-exists. When you add a second, pass yours in the same way the provider is passed
-— the intent is marked with a comment at the import.
+`startUpstream` defaults to the Claude mock. `send()` posts JSON; `sendRaw(path,
+buffer, headers)` posts bytes, which is what a binary provider needs.
 
 There are helpers for walking the log tree (`sessionDir`, `turnDirs`,
 `requestDirs`, `readJson`, `readText`) and a `settle()`, because the proxy
@@ -141,6 +153,16 @@ took.
 write, and it is cheap — it is a JSON file, not an API call. Trim secrets and
 file contents; keep every structural quirk, especially the ones that look like
 noise.
+
+Cursor takes the other route, for a reason worth knowing. Its traffic is
+protobuf, and a real capture would carry the whole system prompt, the user's
+rules and skills, and absolute paths from the machine it was taken on — none of
+which belongs in the repo. So [`test/cursor/encode.ts`](../test/cursor/encode.ts)
+*builds* wire-shaped bodies instead, reproducing each quirk deliberately: the
+event blob carried as a hex string, counts sent as decimal strings, per-frame
+gzip, the context breakdown nested one level deeper than it looks. Synthetic
+fixtures are the right answer when a faithful capture cannot be published —
+but only once you have read the real bytes and know which quirks to reproduce.
 
 ## Verifying a refactor did not change behaviour
 

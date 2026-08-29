@@ -4,9 +4,10 @@ This directory explains how `ai-request-logger` is put together, and — the poi
 of it — **how to teach it a new AI harness** (Cursor, Codex, Aider, an internal
 gateway) without touching the proxy itself.
 
-The repo started as a Claude-Code-only proxy. It is now a generic proxy plus one
-*provider*. Claude is not privileged; it is the worked example that every doc
-here points at.
+The repo started as a Claude-Code-only proxy. It is now a generic proxy plus two
+*providers*. Claude is not privileged; it is the worked example that every doc
+here points at. Cursor is the second, and the one to read when your harness does
+not speak JSON.
 
 ## Read in this order
 
@@ -17,6 +18,7 @@ here points at.
 | [adding-a-provider.md](./adding-a-provider.md) | The step-by-step recipe, start to finish |
 | [testing.md](./testing.md) | How the suite is split, and what to write for a new provider |
 | [log-format.md](./log-format.md) | The on-disk tree, and which parts a provider controls |
+| [cursor.md](./cursor.md) | The Cursor CLI provider: its protocol, and what it took to read it |
 
 ## The one-paragraph version
 
@@ -37,7 +39,7 @@ The dependency arrow points one way: providers depend on core, core depends on
 the `Provider` contract. You can check it in one command:
 
 ```bash
-grep -rn "claude" src/core/     # should print nothing
+grep -rn "claude\|cursor" src/core/    # should print nothing
 ```
 
 If that ever returns a hit, a vendor detail has leaked into the generic half and

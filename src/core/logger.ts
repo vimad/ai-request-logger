@@ -8,6 +8,7 @@
 import { createWriteStream, mkdirSync, type WriteStream } from "node:fs";
 import { appendFile, writeFile } from "node:fs/promises";
 import { basename, join, relative } from "node:path";
+import { encodeBody } from "./bytes.ts";
 import type { Config } from "./config.ts";
 import { renderIndex, renderSession, renderTurn } from "./render.ts";
 import type { SseEvent } from "./sse.ts";
@@ -57,7 +58,8 @@ export interface RequestMeta {
   url: string;
   remote: string;
   headers: Record<string, string>;
-  bodyText: string;
+  /** The request body verbatim; stored as text or base64, never lossily. */
+  bodyBuf: Buffer;
   body: unknown;
   shape?: RequestShape;
 }
@@ -332,7 +334,7 @@ export class RequestLog {
   }
 
   async writeRequest(): Promise<void> {
-    const { shape, headers, body, bodyText, method, path, url, remote } = this.#meta;
+    const { shape, headers, body, bodyBuf, method, path, url, remote } = this.#meta;
     this.#requestPayload = {
       at: this.startedAt,
       provider: this.#cfg.provider.id,
@@ -355,7 +357,7 @@ export class RequestLog {
         ...(shape.detail ?? {}),
       },
       headers: redactHeaders(headers, this.#cfg.redact),
-      body: body ?? bodyText,
+      body: body ?? encodeBody(bodyBuf),
     };
     await writeFile(join(this.dir, "request.json"), jsonStringify(this.#requestPayload)).catch(
       () => {},
@@ -373,7 +375,7 @@ export class RequestLog {
     for (const e of events) w.write(JSON.stringify(e) + "\n");
   }
 
-  writeRaw(chunk: string): void {
+  writeRaw(chunk: Buffer): void {
     if (!this.#cfg.rawSse) return;
     this.#raw ??= createWriteStream(join(this.dir, "stream.raw.txt"), { flags: "a" });
     this.#raw.write(chunk);

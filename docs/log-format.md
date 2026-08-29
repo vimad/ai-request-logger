@@ -72,6 +72,21 @@ could not describe at all lands in `…__session-non-messages-traffic/` with
 }
 ```
 
+### Bodies that are not text
+
+`body` is the parsed JSON when the request claimed to be JSON, and the body as
+text otherwise — but only when the bytes are valid UTF-8. When they are not,
+they are stored losslessly instead:
+
+```jsonc
+"body": { "__binary": true, "encoding": "base64", "bytes": 4586, "data": "H4sIA…" }
+```
+
+`Buffer.toString("utf8")` replaces every invalid sequence with U+FFFD and there
+is no way back, so a protobuf or gzipped body would be silently destroyed by
+the text path. `decodeBody()` in [`core/bytes.ts`](../src/core/bytes.ts) reads
+either form back. The same rule applies to `response.json`'s `body`.
+
 **The flattening is deliberate.** `RequestShape.detail` is spread into `shape`
 rather than nested, so your renderer reads `shape.toolCount`, not
 `shape.detail.toolCount`. The core writes the first block and never inspects the
@@ -129,10 +144,14 @@ One append-only line per provider request — the thing to grep or pipe into `jq
 
 ## `stream.jsonl`
 
-One line per SSE event, as parsed by the core: `{ at, event, data }`, where `at`
-is milliseconds since the upstream request was sent. This is the transport-level
-record — it is written before any provider interprets it, so it survives a
-`reconstructMessage` that gets something wrong.
+One line per event: `{ at, event, data }`, where `at` is milliseconds since the
+upstream request was sent. For SSE this is the transport-level record, written
+before any provider interprets it, so it survives a `reconstructMessage` that
+gets something wrong.
+
+A provider using `binary` framing produces these from `decodeStream` once the
+body is complete, so it has no per-frame arrival time and writes `at: 0`. Order
+is still the line order.
 
 ## Rules for renderers
 

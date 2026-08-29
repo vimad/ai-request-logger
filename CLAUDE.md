@@ -6,6 +6,7 @@ built-in TypeScript support. Node 22.18+.
 
 ```bash
 node src/index.ts        # run the proxy   (npm start)
+node src/index.ts --provider cursor   # ... for the Cursor CLI (`agent`)
 npm test                 # node --test, ~1s, no network
 npx tsc --noEmit         # typecheck src/ and test/
 npm run report           # re-render a captured log tree
@@ -15,7 +16,8 @@ npm run report           # re-render a captured log tree
 
 `src/core/` is a provider-agnostic proxy; everything vendor-specific sits behind
 the `Provider` interface in `src/core/types.ts` and lives in `src/<provider>/`.
-`src/claude/` is the reference implementation.
+`src/claude/` is the reference implementation; `src/cursor/` is the second, and
+shows what a binary (protobuf/Connect) harness needs.
 
 ## Adding support for a new AI harness
 
@@ -30,6 +32,7 @@ directory.
 | [docs/adding-a-provider.md](./docs/adding-a-provider.md) | The step-by-step recipe and checklist |
 | [docs/testing.md](./docs/testing.md) | How the suite is split; what to write for a new provider |
 | [docs/log-format.md](./docs/log-format.md) | The on-disk records and the rules renderers must obey |
+| [docs/cursor.md](./docs/cursor.md) | The Cursor CLI provider: its protocol, and the traps in it |
 
 The recipe in short: capture real traffic first with the proxy running and no
 provider written, write `src/<name>/{index,turns,messages,render}.ts`, register
@@ -38,7 +41,7 @@ it in `src/providers.ts`, mirror the tests under `test/<name>/`.
 ## Invariants — do not break these
 
 1. **`src/core/` must never import from a provider directory.**
-   `grep -rn "claude" src/core/` prints nothing. Keep it that way.
+   `grep -rn "claude\|cursor" src/core/` prints nothing. Keep it that way.
 2. **Vendor fields go in `RequestShape.detail`,** never as new top-level fields
    on `RequestShape`. The logger flattens `detail` into `request.json`.
 3. **Token counts go through `renderer.tokens()`** into the neutral
@@ -47,8 +50,19 @@ it in `src/providers.ts`, mirror the tests under `test/<name>/`.
 4. **`renderer.request()` is a pure function of `request.json` + `response.json`.**
    The e2e test asserts the offline re-render equals what the proxy wrote live.
 5. **Never truncate logged content.** Use `block()` from `core/markdown.ts`.
-6. **The proxy is transparent.** Headers forwarded verbatim apart from RFC 9110
+6. **Never let a body reach disk lossily.** Bodies go through `encodeBody()` in
+   `core/bytes.ts`: text when the bytes are valid UTF-8, base64 when they are
+   not. `Buffer.toString("utf8")` on a protobuf body destroys it silently.
+7. **The proxy is transparent.** Headers forwarded verbatim apart from RFC 9110
    hop-by-hop; credentials relayed untouched and redacted only in the log.
+8. **Nothing secret becomes a path.** Cursor keys its session on a hash of
+   `x-blob-encryption-key`, never the value.
+
+## Using the Cursor provider
+
+`agent --endpoint http://127.0.0.1:8787` (or `CURSOR_API_ENDPOINT`). It also
+needs `{"network": {"useHttp1ForAgent": true}}` in `~/.cursor/cli-config.json` —
+on HTTP/2 the CLI bypasses the proxy silently and the log stays empty.
 
 ## Notes
 

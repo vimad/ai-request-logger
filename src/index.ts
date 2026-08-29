@@ -23,6 +23,7 @@ server.listen(cfg.port, cfg.host, () => {
   const base = `http://${cfg.host}:${cfg.port}`;
   const rel = relative(process.cwd(), cfg.logDir) || cfg.logDir;
   const envVar = provider.baseUrlEnvVar;
+  const client = provider.clientCommand;
   const others = providers.map((p) => p.id).filter((id) => id !== provider.id);
 
   console.log("");
@@ -42,7 +43,7 @@ server.listen(cfg.port, cfg.host, () => {
   console.log("");
   console.log(c.dim("  ── for the whole shell session ─────────────────────────────"));
   console.log(`    ${c.green(`export ${envVar}=${base}`)}`);
-  console.log(`    ${c.green("claude")}`);
+  console.log(`    ${c.green(client)}`);
   console.log("");
   console.log(c.dim("  ── persist for one project (.claude/settings.local.json) ───"));
   console.log(c.green(`    { "env": { "${envVar}": "${base}" } }`));
