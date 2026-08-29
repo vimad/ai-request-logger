@@ -55,6 +55,19 @@ describe("turn.md", () => {
     assert.match(md, /returned its result/);
   });
 
+  it("prints a dash, not a zero, for a request that reported no usage", () => {
+    // A 429 or an aborted stream carries no usage. Zero-filling it would claim
+    // the request was free, which is a different statement from "no data".
+    const md = renderTurn(
+      { ...turn, requests: [{ n: 1, dir: "d", kind: "aux", status: 429, durationMs: 673, messageCount: 1 }] },
+      "x",
+      fake,
+    );
+    const row = md.split("\n").find((l) => l.startsWith("| [001]"))!;
+    assert.ok(!/\| 0 \|/.test(row), `usage-less request must not read as 0: ${row}`);
+    assert.match(row, /\| - \| - \| - \|/);
+  });
+
   it("shows what was asked", () => {
     assert.match(renderTurn(turn, "do the thing", fake), /## What was asked/);
   });

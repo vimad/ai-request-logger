@@ -12,8 +12,11 @@ the **provider requests**, and they are numbered inside the turn they belong to.
 
 The proxy core is provider-agnostic; everything that knows about a particular
 API lives behind a small `Provider` interface. **Claude Code / the Anthropic
-Messages API** is the provider that ships today — see
-[Adding a provider](#adding-a-provider).
+Messages API** is the provider that ships today.
+
+> **Extending it to another harness (Cursor, Codex, an internal gateway)?**
+> Start at [`docs/`](./docs/) — architecture, the provider contract, a
+> step-by-step recipe, the testing strategy and the log format.
 
 No npm install, no `node_modules`, no build step. It runs straight off Node's
 built-in TypeScript support.
@@ -236,6 +239,10 @@ Drop it in `src/cursor/`, add it to `src/providers.ts`, and run with
 `--provider cursor`. Nothing in `src/core` changes: the forwarding, the log
 tree, the turn/session rollups and the offline report all work off the
 `Provider` contract alone.
+
+The full recipe — including how to capture real traffic before you write any
+code, the `turnKey` rules, and the checklist — is in
+[`docs/adding-a-provider.md`](./docs/adding-a-provider.md).
 
 A `RequestShape` carries only what the core files traffic in — session id, turn
 key and label, kind, model, message count. Anything provider-specific rides

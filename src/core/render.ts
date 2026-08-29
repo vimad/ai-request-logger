@@ -60,10 +60,12 @@ export function renderTurn(
       "| # | kind | model | status | time | | in | cached | out | stop | tool calls |",
       "|---:|---|---|---|---:|---|---:|---:|---:|---|---|",
       ...requests.map((r) => {
-        const t = renderer.tokens(r.usage);
+        // A request that reported no usage at all (an error, an aborted
+        // stream) must read as "-", not as a confident zero.
+        const t = r.usage === undefined ? undefined : renderer.tokens(r.usage);
         const link = `[${String(r.n).padStart(3, "0")}](./${r.dir}/request.md)`;
         const kind = r.agentId ? `${r.kind} · sub` : r.kind;
-        return `| ${link} | ${kind} | \`${r.model ?? "-"}\` | ${r.error ? "❌" : (r.status ?? "-")} | ${duration(r.durationMs)} | \`${bar(r.durationMs ?? 0, slowest, 10)}\` | ${num(t.input)} | ${num(t.cacheRead)} | ${num(t.output)} | ${r.stopReason ? `\`${r.stopReason}\`` : "-"} | ${(r.toolCalls ?? []).map((x) => `\`${x}\``).join(" ") || "-"} |`;
+        return `| ${link} | ${kind} | \`${r.model ?? "-"}\` | ${r.error ? "❌" : (r.status ?? "-")} | ${duration(r.durationMs)} | \`${bar(r.durationMs ?? 0, slowest, 10)}\` | ${num(t?.input)} | ${num(t?.cacheRead)} | ${num(t?.output)} | ${r.stopReason ? `\`${r.stopReason}\`` : "-"} | ${(r.toolCalls ?? []).map((x) => `\`${x}\``).join(" ") || "-"} |`;
       }),
     ].join("\n"),
   );
