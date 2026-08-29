@@ -16,7 +16,7 @@ export function createProxyServer(cfg: Config, onLine: (line: string) => void = 
   const store = new LogStore(cfg);
   const server = createServer(createHandler({ cfg, store, onLine }));
 
-  // Claude Code holds long-lived streaming requests open while the model
+  // Agent clients hold long-lived streaming requests open while the model
   // thinks; none of the default socket timeouts may cut one short.
   server.requestTimeout = 0;
   server.headersTimeout = 0;

@@ -1,10 +1,17 @@
+/**
+ * The log tree: sessions contain turns, turns contain provider requests.
+ *
+ * This layout is provider-agnostic. The only provider-shaped things that reach
+ * disk are the contents of `RequestShape.detail` (merged into `request.json`)
+ * and the Markdown, which the provider's renderer produces.
+ */
 import { createWriteStream, mkdirSync, type WriteStream } from "node:fs";
 import { appendFile, writeFile } from "node:fs/promises";
 import { basename, join, relative } from "node:path";
 import type { Config } from "./config.ts";
+import { renderIndex, renderSession, renderTurn } from "./render.ts";
 import type { SseEvent } from "./sse.ts";
-import type { RequestShape } from "./turns.ts";
-import { renderIndex, renderRequest, renderSession, renderTurn, totalTokens } from "./markdown.ts";
+import type { RequestShape, ResponseFacts, TurnRequestSummary } from "./types.ts";
 import { jsonStringify, nowIso, pad, sha1, slug, stamp } from "./util.ts";
 
 const SECRET_HEADERS = new Set([
@@ -18,6 +25,9 @@ const SECRET_HEADERS = new Set([
 /** Requests that carry no turn of their own land in this bucket. */
 const BACKGROUND_TURN = 0;
 
+/** Traffic the provider could not describe still gets captured, under here. */
+const UNSTRUCTURED_SESSION = "non-messages-traffic";
+
 interface TurnState {
   index: number;
   key: string;
@@ -29,22 +39,6 @@ interface TurnState {
   /** Messages the previous main-thread request carried, for the diff view. */
   prevMessageCount: number;
   userInput: string;
-}
-
-interface TurnRequestSummary {
-  n: number;
-  dir: string;
-  kind: string;
-  model?: string;
-  agentId?: string;
-  status?: number;
-  stopReason?: string;
-  durationMs?: number;
-  ttfbMs?: number;
-  messageCount: number;
-  toolCalls?: string[];
-  usage?: unknown;
-  error?: string;
 }
 
 interface SessionState {
@@ -71,7 +65,6 @@ export interface RequestMeta {
 export class LogStore {
   #cfg: Config;
   #sessions = new Map<string, SessionState>();
-  #unstructured = 0;
 
   constructor(cfg: Config) {
     this.#cfg = cfg;
@@ -85,7 +78,7 @@ export class LogStore {
   /** Open a log entry for one provider request. Never throws. */
   begin(meta: RequestMeta): RequestLog {
     const shape = meta.shape;
-    const session = shape ? this.#session(shape.sessionId) : this.#session("non-messages-traffic");
+    const session = this.#session(shape ? shape.sessionId : UNSTRUCTURED_SESSION);
     const turn = shape ? this.#turn(session, shape) : this.#backgroundTurn(session);
 
     turn.requestCount += 1;
@@ -93,7 +86,9 @@ export class LogStore {
     const n = turn.requestCount;
 
     const parts = [`req-${pad(n)}`, shape ? shape.kind : "raw"];
-    if (shape?.agentId) parts.push(`agent-${slug(shape.agentId).replace(/^agent-/, "").slice(0, 12)}`);
+    if (shape?.agentId) {
+      parts.push(`agent-${slug(shape.agentId).replace(/^agent-/, "").slice(0, 12)}`);
+    }
     if (shape?.model) parts.push(slug(shape.model, 30));
     const dir = join(turn.dir, parts.join("__"));
     mkdirSync(dir, { recursive: true });
@@ -191,6 +186,7 @@ export class LogStore {
         join(session.dir, "session.json"),
         jsonStringify({
           session: session.id,
+          provider: this.#cfg.provider.id,
           startedAt: session.startedAt,
           updatedAt: nowIso(),
           turns: session.turnCount,
@@ -205,6 +201,7 @@ export class LogStore {
       ),
     ]).catch(() => {});
 
+    const { renderer } = this.#cfg.provider;
     try {
       await writeFile(
         join(turn.dir, "turn.md"),
@@ -217,6 +214,7 @@ export class LogStore {
             requests: turn.requests,
           },
           turn.userInput,
+          renderer,
         ),
       );
       await writeFile(
@@ -224,6 +222,7 @@ export class LogStore {
         renderSession(
           {
             session: session.id,
+            provider: this.#cfg.provider.id,
             startedAt: session.startedAt,
             updatedAt: nowIso(),
             turns: session.turnCount,
@@ -233,15 +232,17 @@ export class LogStore {
             meta: { turn: t.index, label: t.label, requests: t.requests },
             dir: relative(session.dir, t.dir),
           })),
+          renderer,
         ),
       );
       await writeFile(join(this.#cfg.logDir, "index.md"), this.#renderIndex());
     } catch {
-      // Same here: the JSON is the source of truth, Markdown is a convenience.
+      // The JSON is the source of truth; Markdown is a convenience.
     }
   }
 
   #renderIndex(): string {
+    const { renderer } = this.#cfg.provider;
     const rows = [...this.#sessions.values()].map((s) => {
       const reqs = s.turns.flatMap((t) => t.requests);
       return {
@@ -249,7 +250,7 @@ export class LogStore {
         turns: s.turnCount,
         requests: s.requestCount,
         ms: reqs.reduce((n, r) => n + (r.durationMs ?? 0), 0),
-        tokens: reqs.reduce((n, r) => n + totalTokens(r.usage as any), 0),
+        tokens: reqs.reduce((n, r) => n + renderer.tokens(r.usage).total, 0),
       };
     });
     return renderIndex(rows, this.#cfg.logDir);
@@ -259,10 +260,6 @@ export class LogStore {
     await appendFile(join(this.#cfg.logDir, "index.jsonl"), JSON.stringify(line) + "\n").catch(
       () => {},
     );
-  }
-
-  nextUnstructured(): number {
-    return ++this.#unstructured;
   }
 }
 
@@ -278,6 +275,17 @@ export function redactHeaders(
       : v;
   }
   return out;
+}
+
+export interface FinishResult extends ResponseFacts {
+  status?: number;
+  headers?: Record<string, string | string[] | undefined>;
+  body?: unknown;
+  message?: Record<string, unknown>;
+  eventCount?: number;
+  ttfbMs?: number;
+  durationMs?: number;
+  error?: string;
 }
 
 /** One provider request/response pair on disk. */
@@ -326,27 +334,26 @@ export class RequestLog {
   async writeRequest(): Promise<void> {
     const { shape, headers, body, bodyText, method, path, url, remote } = this.#meta;
     this.#requestPayload = {
-        at: this.startedAt,
-        session: this.#session.id,
-        turn: this.#turn.index,
-        request: this.n,
-        method,
-        path,
-        upstream: url,
-        client: remote,
-        shape: shape && {
-          kind: shape.kind,
-          model: shape.model,
-          stream: shape.stream,
-          agentId: shape.agentId,
-          parentAgentId: shape.parentAgentId,
-          messageCount: shape.messageCount,
-          toolCount: shape.toolCount,
-          toolNames: shape.toolNames,
-          systemChars: shape.systemChars,
-          thinking: shape.thinking,
-          toolResults: shape.toolResults,
-        },
+      at: this.startedAt,
+      provider: this.#cfg.provider.id,
+      session: this.#session.id,
+      turn: this.#turn.index,
+      request: this.n,
+      method,
+      path,
+      upstream: url,
+      client: remote,
+      // Core fields first, then whatever the provider added, flattened so the
+      // renderer sees one object rather than having to reach into `detail`.
+      shape: shape && {
+        kind: shape.kind,
+        model: shape.model,
+        stream: shape.stream,
+        agentId: shape.agentId,
+        parentAgentId: shape.parentAgentId,
+        messageCount: shape.messageCount,
+        ...(shape.detail ?? {}),
+      },
       headers: redactHeaders(headers, this.#cfg.redact),
       body: body ?? bodyText,
     };
@@ -372,28 +379,9 @@ export class RequestLog {
     this.#raw.write(chunk);
   }
 
-  async finish(result: {
-    status?: number;
-    headers?: Record<string, string | string[] | undefined>;
-    body?: unknown;
-    message?: Record<string, unknown>;
-    eventCount?: number;
-    ttfbMs?: number;
-    durationMs?: number;
-    error?: string;
-  }): Promise<void> {
+  async finish(result: FinishResult): Promise<void> {
     this.#stream?.end();
     this.#raw?.end();
-
-    const message = result.message;
-    const usage = (message?.usage ?? (result.body as any)?.usage) as unknown;
-    const stopReason = (message?.stop_reason ?? (result.body as any)?.stop_reason) as
-      | string
-      | undefined;
-    const content = (message?.content ?? (result.body as any)?.content) as
-      | Array<Record<string, any>>
-      | undefined;
-    const toolCalls = content?.filter((b) => b?.type === "tool_use").map((b) => String(b.name));
 
     const responsePayload = {
       at: nowIso(),
@@ -402,12 +390,12 @@ export class RequestLog {
       timing: { ttfbMs: result.ttfbMs, durationMs: result.durationMs },
       sseEvents: result.eventCount,
       headers: result.headers && redactHeaders(flatten(result.headers), this.#cfg.redact),
-      usage,
-      stopReason,
-      toolCalls,
+      usage: result.usage,
+      stopReason: result.stopReason,
+      toolCalls: result.toolCalls,
       // For streamed replies this is rebuilt from the SSE events, so it has
       // the same shape a non-streaming response would have had.
-      body: result.body ?? message,
+      body: result.body ?? result.message,
     };
     await writeFile(join(this.dir, "response.json"), jsonStringify(responsePayload)).catch(() => {});
 
@@ -415,7 +403,7 @@ export class RequestLog {
     try {
       await writeFile(
         join(this.dir, "request.md"),
-        renderRequest(this.#requestPayload, responsePayload, {
+        this.#cfg.provider.renderer.request(this.#requestPayload, responsePayload, {
           prevMessageCount: this.#prevMessageCount,
         }),
       );
@@ -430,12 +418,12 @@ export class RequestLog {
       model: this.#meta.shape?.model,
       agentId: this.#meta.shape?.agentId,
       status: result.status,
-      stopReason,
+      stopReason: result.stopReason,
       durationMs: result.durationMs,
       ttfbMs: result.ttfbMs,
       messageCount: this.#meta.shape?.messageCount ?? 0,
-      toolCalls,
-      usage,
+      toolCalls: result.toolCalls,
+      usage: result.usage,
       error: result.error,
     };
     this.#turn.requests.push(summary);
@@ -443,6 +431,7 @@ export class RequestLog {
     await this.#store.flush(this.#session, this.#turn);
     await this.#store.appendIndex({
       at: this.startedAt,
+      provider: this.#cfg.provider.id,
       session: this.#session.id,
       turn: this.#turn.index,
       request: this.n,

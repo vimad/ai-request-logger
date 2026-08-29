@@ -2,7 +2,7 @@
   "name": "ai-request-logger",
   "version": "1.0.0",
   "private": true,
-  "description": "Zero-dependency reverse proxy that logs Claude Code's Anthropic API traffic, grouped into turns and provider requests.",
+  "description": "Zero-dependency reverse proxy that logs AI coding-agent API traffic, grouped into sessions, turns and provider requests.",
   "type": "module",
   "engines": {
     "node": ">=22.18.0"
@@ -14,7 +14,7 @@
     "start": "node src/index.ts",
     "dev": "node --watch src/index.ts",
     "typecheck": "tsc --noEmit",
-    "report": "node src/report.ts",
+    "report": "node src/core/report.ts",
     "test": "node --test \"test/**/*.test.ts\""
   },
   "devDependencies": {

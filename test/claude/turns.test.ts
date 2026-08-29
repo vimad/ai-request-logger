@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { describeRequest, type AnthropicRequestBody } from "../src/turns.ts";
+import { describeRequest, type AnthropicRequestBody } from "../../src/claude/turns.ts";
 
 const TOOLS = [{ name: "Bash" }, { name: "Read" }];
 const shape = (body: AnthropicRequestBody) => describeRequest(body, {}, true);

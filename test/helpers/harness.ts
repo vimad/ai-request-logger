@@ -1,9 +1,13 @@
 import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Config } from "../../src/config.ts";
-import { createProxyServer } from "../../src/server.ts";
-import { startMockUpstream, type MockOptions, type MockUpstream } from "./upstream.ts";
+import type { Config } from "../../src/core/config.ts";
+import { createProxyServer } from "../../src/core/server.ts";
+import type { Provider } from "../../src/core/types.ts";
+import { claude } from "../../src/claude/index.ts";
+// The proxy needs *some* upstream to talk to. The Claude mock is the only one
+// there is today; a second provider would bring its own and pass it in here.
+import { startMockUpstream, type MockOptions, type MockUpstream } from "../claude/upstream.ts";
 
 export interface Harness {
   base: string;
@@ -15,11 +19,14 @@ export interface Harness {
 }
 
 /** Proxy + mock upstream + a throwaway log directory, all on ephemeral ports. */
-export async function startHarness(opts: MockOptions = {}): Promise<Harness> {
+export async function startHarness(
+  opts: MockOptions & { provider?: Provider } = {},
+): Promise<Harness> {
   const upstream = await startMockUpstream(opts);
   const logDir = mkdtempSync(join(tmpdir(), "arl-test-"));
 
   const cfg: Config = {
+    provider: opts.provider ?? claude,
     port: 0,
     host: "127.0.0.1",
     upstream: new URL(upstream.origin),

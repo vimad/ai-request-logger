@@ -1,6 +1,10 @@
 import { resolve } from "node:path";
+import { getProvider } from "../providers.ts";
+import type { Provider } from "./types.ts";
 
 export interface Config {
+  /** Which provider's wire format the traffic is expected to speak. */
+  provider: Provider;
   /** Port the proxy listens on. */
   port: number;
   /** Host/interface the proxy binds to. */
@@ -41,11 +45,16 @@ export function loadConfig(argv: string[]): Config {
     else flags.set(arg.slice(2), argv[i + 1]?.startsWith("--") === false ? argv[++i]! : "true");
   }
 
+  const provider = getProvider(flags.get("provider") ?? process.env.LOGGER_PROVIDER);
+
+  // The provider decides where traffic goes by default, so `--provider` alone
+  // is enough to point the proxy at a different API.
   const upstream = new URL(
-    flags.get("upstream") ?? process.env.LOGGER_UPSTREAM ?? "https://api.anthropic.com",
+    flags.get("upstream") ?? process.env.LOGGER_UPSTREAM ?? provider.defaultUpstream,
   );
 
   return {
+    provider,
     port: flags.has("port") ? Number.parseInt(flags.get("port")!, 10) : envInt("LOGGER_PORT", 8787),
     host: flags.get("host") ?? process.env.LOGGER_HOST ?? "127.0.0.1",
     upstream,

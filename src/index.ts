@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import { relative } from "node:path";
-import { loadConfig } from "./config.ts";
-import { createProxyServer } from "./server.ts";
+import { loadConfig } from "./core/config.ts";
+import { createProxyServer } from "./core/server.ts";
+import { providers } from "./providers.ts";
 
 const cfg = loadConfig(process.argv.slice(2));
+const provider = cfg.provider;
 
 const color = process.stdout.isTTY && !process.env.NO_COLOR;
 const c = {
@@ -20,28 +22,32 @@ const { server } = createProxyServer(cfg, (line) => {
 server.listen(cfg.port, cfg.host, () => {
   const base = `http://${cfg.host}:${cfg.port}`;
   const rel = relative(process.cwd(), cfg.logDir) || cfg.logDir;
+  const envVar = provider.baseUrlEnvVar;
+  const others = providers.map((p) => p.id).filter((id) => id !== provider.id);
 
   console.log("");
-  console.log(c.bold("  ai-request-logger") + c.dim("  ·  zero-dependency Claude Code proxy"));
+  console.log(c.bold("  ai-request-logger") + c.dim("  ·  zero-dependency AI provider proxy"));
   console.log("");
+  console.log(`  provider    ${c.cyan(provider.id)} ${c.dim(`(${provider.label})`)}`);
   console.log(`  listening   ${c.cyan(base)}`);
   console.log(`  forwarding  ${c.cyan(cfg.upstream.origin)}`);
   console.log(`  logging to  ${c.cyan(rel + "/")}`);
+  if (others.length > 0) {
+    console.log(c.dim(`  others      ${others.join(", ")}   (--provider <id>)`));
+  }
   console.log("");
-  console.log(c.bold("  Point Claude Code at it"));
+  console.log(c.bold("  Point your client at it"));
   console.log(c.dim("  ── one-off, in another terminal ────────────────────────────"));
-  console.log(`    ${c.green(`ANTHROPIC_BASE_URL=${base} claude`)}`);
+  console.log(`    ${c.green(`${envVar}=${base} claude`)}`);
   console.log("");
   console.log(c.dim("  ── for the whole shell session ─────────────────────────────"));
-  console.log(`    ${c.green(`export ANTHROPIC_BASE_URL=${base}`)}`);
+  console.log(`    ${c.green(`export ${envVar}=${base}`)}`);
   console.log(`    ${c.green("claude")}`);
   console.log("");
   console.log(c.dim("  ── persist for one project (.claude/settings.local.json) ───"));
-  console.log(
-    c.green(`    { "env": { "ANTHROPIC_BASE_URL": "${base}" } }`),
-  );
+  console.log(c.green(`    { "env": { "${envVar}": "${base}" } }`));
   console.log("");
-  console.log(c.dim("  Stop logging: unset ANTHROPIC_BASE_URL (or drop the env block)."));
+  console.log(c.dim(`  Stop logging: unset ${envVar} (or drop the env block).`));
   console.log(
     c.dim(
       "  Your existing login is untouched - credentials are forwarded verbatim,\n" +

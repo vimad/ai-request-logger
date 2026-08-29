@@ -1,20 +1,24 @@
+/**
+ * The transparent forwarder. It relays bytes in both directions untouched and
+ * keeps its own decoded copy for the log. Everything it knows about the payload
+ * it asks the configured provider for.
+ */
 import { Agent as HttpAgent, type IncomingMessage, type ServerResponse } from "node:http";
 import { Agent as HttpsAgent, request as httpsRequest } from "node:https";
 import { request as httpRequest } from "node:http";
-import { PassThrough, type Writable } from "node:stream";
+import { PassThrough, type Duplex } from "node:stream";
 import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
 import type { Config } from "./config.ts";
 import { LogStore, type RequestMeta } from "./logger.ts";
-import { SseParser, reconstructMessage } from "./sse.ts";
-import { describeRequest, type AnthropicRequestBody } from "./turns.ts";
+import { SseParser } from "./sse.ts";
+import type { ResponseFacts } from "./types.ts";
 import { since, tryParseJson } from "./util.ts";
 
 /**
  * Hop-by-hop headers are meaningful only for a single connection and must not
- * be relayed (RFC 9110 7.6.1). Everything else - including every `anthropic-*`
- * and `x-claude-code-*` header and the credential - is forwarded verbatim,
- * because Claude Code ships new capabilities as new beta headers and an
- * allowlist would silently disable them.
+ * be relayed (RFC 9110 7.6.1). Everything else - including every vendor header
+ * and the credential - is forwarded verbatim, because AI clients ship new
+ * capabilities as new beta headers and an allowlist would silently disable them.
  */
 const HOP_BY_HOP = new Set([
   "connection",
@@ -34,6 +38,7 @@ export interface ProxyDeps {
 }
 
 export function createHandler({ cfg, store, onLine }: ProxyDeps) {
+  const provider = cfg.provider;
   const secure = cfg.upstream.protocol === "https:";
   const agent = secure
     ? new HttpsAgent({ keepAlive: true, maxSockets: 64 })
@@ -56,16 +61,17 @@ export function createHandler({ cfg, store, onLine }: ProxyDeps) {
       const started = process.hrtime.bigint();
       const url = req.url ?? "/";
       const headers = normalizeHeaders(req.headers);
-      const isMessages = /\/v1\/messages(?:\?|$)/.test(url);
       const bodyText = bodyBuf.toString("utf8");
       const parsedBody = headers["content-type"]?.includes("json")
         ? tryParseJson(bodyText)
         : undefined;
 
-      const shape =
-        parsedBody && typeof parsedBody === "object"
-          ? describeRequest(parsedBody as AnthropicRequestBody, headers, isMessages)
-          : undefined;
+      const shape = provider.describeRequest({
+        body: parsedBody,
+        headers,
+        path: url,
+        isInference: provider.isInferenceEndpoint(url),
+      });
 
       const basePath = cfg.upstream.pathname.replace(/\/$/, "");
       const targetPath = basePath + url;
@@ -114,8 +120,8 @@ export function createHandler({ cfg, store, onLine }: ProxyDeps) {
             resHeaders[k] = v;
           }
           res.writeHead(status, resHeaders);
-          // Start the response on the wire now: Claude Code aborts a stream
-          // that goes quiet, and it counts on upstream pings arriving live.
+          // Start the response on the wire now: streaming clients abort a
+          // stream that goes quiet, and they count on pings arriving live.
           res.flushHeaders();
 
           const contentType = String(up.headers["content-type"] ?? "");
@@ -162,8 +168,9 @@ export function createHandler({ cfg, store, onLine }: ProxyDeps) {
             if (finished) return;
             finished = true;
             if (isSse) entry.writeEvents(parser.end(since(started)));
-            const message = isSse ? reconstructMessage(parser.events) : undefined;
+            const message = isSse ? provider.reconstructMessage(parser.events) : undefined;
             const body = isSse ? undefined : (tryParseJson(textBody) ?? textBody);
+            const facts = provider.responseFacts(message, body);
             const durationMs = since(started);
             void entry
               .finish({
@@ -174,10 +181,11 @@ export function createHandler({ cfg, store, onLine }: ProxyDeps) {
                 eventCount: isSse ? parser.events.length : undefined,
                 ttfbMs: ttfb,
                 durationMs,
+                ...facts,
               })
               .then(() => {
                 onLine(
-                  summarize(entry.turnIndex, entry.n, meta, status, durationMs, ttfb, message, body),
+                  summarize(entry.turnIndex, entry.n, meta, status, durationMs, ttfb, facts, cfg),
                 );
               });
           }
@@ -206,7 +214,8 @@ export function createHandler({ cfg, store, onLine }: ProxyDeps) {
   };
 }
 
-function decoderFor(encoding: string): Writable & NodeJS.ReadableStream {
+/** Every branch is a Duplex, so the caller can both write and watch it end. */
+function decoderFor(encoding: string): Duplex {
   const enc = encoding.toLowerCase();
   if (enc.includes("br")) return createBrotliDecompress();
   if (enc.includes("gzip")) return createGunzip();
@@ -230,16 +239,11 @@ function summarize(
   status: number,
   durationMs: number,
   ttfb: number | undefined,
-  message: Record<string, unknown> | undefined,
-  body: unknown,
+  facts: ResponseFacts,
+  cfg: Config,
 ): string {
   const shape = meta.shape;
-  const usage = (message?.usage ?? (body as any)?.usage) as Record<string, number> | undefined;
-  const content = (message?.content ?? (body as any)?.content) as Array<any> | undefined;
-  const tools = content
-    ?.filter((b) => b?.type === "tool_use")
-    .map((b) => b.name)
-    .join(",");
+  const t = facts.usage ? cfg.provider.renderer.tokens(facts.usage) : undefined;
 
   const bits = [
     `[turn ${turn} · req ${n}]`,
@@ -249,9 +253,9 @@ function summarize(
     `-> ${status}`,
     `${Math.round(durationMs)}ms`,
     ttfb !== undefined ? `ttfb=${Math.round(ttfb)}ms` : "",
-    usage ? `in=${usage.input_tokens ?? 0} out=${usage.output_tokens ?? 0}` : "",
-    usage?.cache_read_input_tokens ? `cached=${usage.cache_read_input_tokens}` : "",
-    tools ? `tools=${tools}` : "",
+    t ? `in=${t.input} out=${t.output}` : "",
+    t?.cacheRead ? `cached=${t.cacheRead}` : "",
+    facts.toolCalls?.length ? `tools=${facts.toolCalls.join(",")}` : "",
   ];
   return bits.filter(Boolean).join(" ");
 }

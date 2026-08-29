@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { block, renderRequest, renderTurn } from "../src/markdown.ts";
+import { renderRequest, tokens, usageTable } from "../../src/claude/render.ts";
 
 const req = (overrides: any = {}) => ({
   at: "2026-08-29T00:00:00.000Z",
@@ -23,41 +23,6 @@ const res = (overrides: any = {}) => ({
   stopReason: "end_turn",
   body: { content: [{ type: "text", text: "hi there" }] },
   ...overrides,
-});
-
-describe("content blocks are never truncated", () => {
-  it("keeps the whole of a long block, head and tail", () => {
-    const huge = "HEAD\n" + "x".repeat(200_000) + "\nTAIL";
-    const out = block(huge);
-    assert.ok(out.includes("HEAD"));
-    assert.ok(out.includes("TAIL"));
-    assert.ok(out.length > huge.length, "content must be present in full");
-    assert.ok(!out.includes("truncated"));
-  });
-
-  it("puts long content in a fixed-height scroll box", () => {
-    const out = block("line\n".repeat(500));
-    assert.match(out, /max-height:/);
-    assert.match(out, /overflow: auto/);
-    assert.match(out, /scroll inside the box/);
-  });
-
-  it("leaves short content as an ordinary fenced block", () => {
-    const out = block("just a line");
-    assert.equal(out, "```text\njust a line\n```");
-  });
-
-  it("escapes markup inside a scroll box so it is not swallowed", () => {
-    const out = block("<b>bold & bigger</b>\n".repeat(100));
-    assert.match(out, /&lt;b&gt;bold &amp; bigger&lt;\/b&gt;/);
-    assert.ok(!out.includes("<b>bold"), "raw markup would be rendered instead of shown");
-  });
-
-  it("sizes the fence past any backtick run in short content", () => {
-    const out = block("```\ninner\n```");
-    assert.match(out, /^````text\n/, "a 3-backtick fence would be broken by the content");
-    assert.ok(out.includes("```\ninner\n```"));
-  });
 });
 
 describe("request.md", () => {
@@ -116,37 +81,28 @@ describe("request.md", () => {
   });
 });
 
-describe("turn.md", () => {
-  const turn = {
-    turn: 2,
-    session: "s1",
-    label: "do the thing",
-    startedAt: "2026-08-29T00:00:00.000Z",
-    requests: [
-      { n: 1, dir: "req-001__main", kind: "main", model: "m", status: 200, stopReason: "tool_use", durationMs: 100, messageCount: 1, toolCalls: ["Bash"], usage: { input_tokens: 10, output_tokens: 5 } },
-      { n: 2, dir: "req-002__main", kind: "main", model: "m", status: 200, stopReason: "end_turn", durationMs: 50, messageCount: 3, toolCalls: [], usage: { input_tokens: 20, output_tokens: 7 } },
-    ],
-  };
-
-  it("totals the turn and lists every provider request", () => {
-    const md = renderTurn(turn, "do the thing");
-    assert.match(md, /# Turn 2 — do the thing/);
-    assert.match(md, /\*\*2 provider requests\*\*/);
-    assert.match(md, /\| \*\*Total\*\* \| \*\*42\*\* \|/, "10+5+20+7");
-    assert.match(md, /\[001\]\(\.\/req-001__main\/request\.md\)/);
+describe("Anthropic token accounting", () => {
+  it("splits prompt tokens into fresh, cache-write and cache-read", () => {
+    const t = tokens({
+      input_tokens: 100,
+      output_tokens: 57,
+      cache_read_input_tokens: 20,
+      cache_creation_input_tokens: 30,
+    });
+    assert.deepEqual(t, { input: 100, output: 57, cacheRead: 20, cacheWrite: 30, total: 207 });
+    const md = usageTable(t);
+    assert.match(md, /\| Cache write \| 30 \|/);
+    assert.match(md, /\| Cache read \| 20\s+·\s+13% of prompt \|/);
   });
 
-  it("narrates what each request did", () => {
-    const md = renderTurn(turn, "do the thing");
-    assert.match(md, /1 message in · 100 ms → called Bash/);
-    assert.match(md, /3 messages in · 50 ms → answered the user/);
+  it("hides the cache rows when nothing was cached", () => {
+    const md = usageTable(tokens({ input_tokens: 5, output_tokens: 1 }));
+    assert.ok(!md.includes("Cache read"));
+    assert.ok(!md.includes("Cache write"));
+    assert.match(md, /\| \*\*Total\*\* \| \*\*6\*\* \|/);
   });
 
-  it("does not claim a background call answered the user", () => {
-    const md = renderTurn(
-      { ...turn, requests: [{ n: 1, dir: "d", kind: "aux", status: 200, stopReason: "end_turn", durationMs: 10, messageCount: 1, toolCalls: [] }] },
-      "x",
-    );
-    assert.match(md, /returned its result/);
+  it("says so when there is no usage at all", () => {
+    assert.equal(usageTable(undefined), "_No usage reported._");
   });
 });

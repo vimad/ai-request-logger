@@ -1,14 +1,19 @@
 # ai-request-logger
 
-A zero-dependency TypeScript reverse proxy that sits between Claude Code and the
-Anthropic API and writes every request and response to `log/`, organised the way
+A zero-dependency TypeScript reverse proxy that sits between an AI coding agent
+and its API and writes every request and response to `log/`, organised the way
 you actually debug them:
 
 > **session → turn → provider request**
 
-One thing you ask Claude is a **turn**. Answering it usually takes several calls
-to the model — think, run a tool, read the result, think again. Those are the
-**provider requests**, and they are numbered inside the turn they belong to.
+One thing you ask the agent is a **turn**. Answering it usually takes several
+calls to the model — think, run a tool, read the result, think again. Those are
+the **provider requests**, and they are numbered inside the turn they belong to.
+
+The proxy core is provider-agnostic; everything that knows about a particular
+API lives behind a small `Provider` interface. **Claude Code / the Anthropic
+Messages API** is the provider that ships today — see
+[Adding a provider](#adding-a-provider).
 
 No npm install, no `node_modules`, no build step. It runs straight off Node's
 built-in TypeScript support.
@@ -35,9 +40,10 @@ To stop logging, drop the env var. Nothing about your install changes.
 
 | Flag | Env | Default |
 | --- | --- | --- |
+| `--provider` | `LOGGER_PROVIDER` | `claude` |
 | `--port` | `LOGGER_PORT` | `8787` |
 | `--host` | `LOGGER_HOST` | `127.0.0.1` |
-| `--upstream` | `LOGGER_UPSTREAM` | `https://api.anthropic.com` |
+| `--upstream` | `LOGGER_UPSTREAM` | the provider's default (`https://api.anthropic.com`) |
 | `--log-dir` | `LOGGER_LOG_DIR` | `log` |
 | `--redact=false` | `LOGGER_REDACT=0` | redaction on |
 | `--raw-sse=true` | `LOGGER_RAW_SSE=1` | off |
@@ -122,12 +128,15 @@ the boxes render at full height: still complete, just not scrollable.
 ### Re-parsing existing logs
 
 The renderer is a pure function of the JSON, so you can re-run it any time —
-over logs captured before you had it, or after you tweak the format:
+over logs captured before you had it, or after you tweak the format. Each
+`session.json` records the provider that captured it, so a log directory holding
+more than one provider re-renders correctly:
 
 ```bash
 npm run report                 # the whole log/ tree
 npm run report -- log/<session>          # one session
 npm run report -- log/<session>/turn-003__.../   # one turn
+npm run report -- log/ --provider=claude         # force a renderer
 ```
 
 ### How turns are detected
@@ -160,18 +169,78 @@ directory — nothing touches your real `log/`.
 
 | Suite | What it holds the line on |
 | --- | --- |
-| `turns.test.ts` | Turn boundaries: tool loops stay one turn, reminders and Claude Code's own prompts never open one |
-| `proxy.test.ts` | Header pass-through, host rewrite, body fidelity, error relay, and that SSE is **not** buffered |
-| `sse.test.ts` | Event parsing across arbitrary chunk splits; rebuilding a message from deltas |
-| `markdown.test.ts` | Nothing is truncated, markup is escaped, fences outlast their content |
-| `e2e.test.ts` | A whole session through the proxy: turn grouping, files written, credentials redacted in the log but not on the wire, and the offline report matching the live output |
+| `core/proxy.test.ts` | Header pass-through, host rewrite, body fidelity, error relay, and that SSE is **not** buffered |
+| `core/sse.test.ts` | Event parsing across arbitrary chunk splits |
+| `core/markdown.test.ts` | Nothing is truncated, markup is escaped, fences outlast their content |
+| `core/render.test.ts` | The turn/session/index rollups, driven by a **fake** provider renderer — if a rollup ever reaches into a provider's usage fields directly, the numbers stop adding up |
+| `claude/turns.test.ts` | Turn boundaries: tool loops stay one turn, reminders and Claude Code's own prompts never open one |
+| `claude/messages.test.ts` | Rebuilding a message from deltas; reading usage, stop reason and tool calls |
+| `claude/render.test.ts` | `request.md`, and the fresh/cache-write/cache-read token split |
+| `claude/e2e.test.ts` | A whole session through the proxy: turn grouping, files written, credentials redacted in the log but not on the wire, and the offline report matching the live output |
 
-`test/fixtures/real-session.json` holds request bodies captured from an actual
+`test/claude/fixtures/real-session.json` holds request bodies captured from an actual
 Claude Code session — trimmed of local paths and file contents, but with the
 message *shapes* preserved. That fixture exists because of a real bug: Claude
 Code sends a prompt as a block array on the first request and as a bare string
 on the follow-ups, which split one turn across two directories. Synthetic tests
 had missed it.
+
+## Project layout
+
+```
+src/
+  index.ts              CLI: flags, banner, signal handling
+  providers.ts          the provider registry
+  core/                 knows nothing about any specific API
+    types.ts            the Provider contract + the on-disk record types
+    config.ts           flags and env
+    server.ts           the HTTP server
+    proxy.ts            transparent forwarding; asks the provider about payloads
+    sse.ts              SSE frame parsing (transport only)
+    logger.ts           the session / turn / request tree on disk
+    markdown.ts         Markdown atoms (fences, scroll boxes, tables, bars)
+    render.ts           turn.md, session.md and index.md rollups
+    report.ts           offline re-render of a captured log tree
+    util.ts
+  claude/               everything Anthropic- and Claude-Code-specific
+    index.ts            the Provider object
+    turns.ts            turn detection, session ids, subagents, reminders
+    messages.ts         rebuilding a message from SSE deltas; usage + stop reason
+    render.ts           content blocks, the token table, request.md
+test/
+  core/                 proxy, SSE, Markdown atoms, rollups
+  claude/               turn detection, message reconstruction, Anthropic rendering,
+                        the mock upstream, and the end-to-end run
+  helpers/harness.ts    proxy + mock upstream + throwaway log dir
+```
+
+### Adding a provider
+
+Everything an API-specific integration needs to supply is one object:
+
+```ts
+export const cursor: Provider = {
+  id: "cursor",
+  label: "Cursor",
+  defaultUpstream: "https://api.cursor.sh",
+  baseUrlEnvVar: "CURSOR_BASE_URL",
+  isInferenceEndpoint(path) { /* which paths carry a prompt */ },
+  describeRequest({ body, headers, isInference }) { /* -> RequestShape */ },
+  reconstructMessage(events) { /* SSE deltas -> one message object */ },
+  responseFacts(message, body) { /* usage, stop reason, tool calls */ },
+  renderer: { tokens, usageTable, request },
+};
+```
+
+Drop it in `src/cursor/`, add it to `src/providers.ts`, and run with
+`--provider cursor`. Nothing in `src/core` changes: the forwarding, the log
+tree, the turn/session rollups and the offline report all work off the
+`Provider` contract alone.
+
+A `RequestShape` carries only what the core files traffic in — session id, turn
+key and label, kind, model, message count. Anything provider-specific rides
+along in `shape.detail`, which is merged into `request.json` verbatim and handed
+straight back to that provider's renderer.
 
 ## Why it doesn't break anything
 

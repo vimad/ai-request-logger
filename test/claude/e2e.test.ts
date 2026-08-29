@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
-import { renderSessionDir } from "../src/report.ts";
+import { renderSessionDir } from "../../src/core/report.ts";
 import {
   ccHeaders,
   readJson,
@@ -14,7 +14,7 @@ import {
   turnDirs,
   TOOLS,
   type Harness,
-} from "./helpers/harness.ts";
+} from "../helpers/harness.ts";
 
 const SESSION = "e2e-session-0001";
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
-import { ccHeaders, settle, startHarness, TOOLS, type Harness } from "./helpers/harness.ts";
+import { ccHeaders, settle, startHarness, TOOLS, type Harness } from "../helpers/harness.ts";
 
 describe("proxy transparency", () => {
   let h: Harness;
@@ -62,7 +62,7 @@ describe("proxy transparency", () => {
     await dead.upstream.close();
     const res = await dead.send({ model: "m", messages: [] }, ccHeaders("dead-session"));
     assert.equal(res.status, 502);
-    assert.equal((await res.json()).error.type, "proxy_error");
+    assert.equal(((await res.json()) as any).error.type, "proxy_error");
     await dead.close();
   });
 });

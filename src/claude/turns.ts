@@ -1,4 +1,5 @@
-import { preview, sha1 } from "./util.ts";
+import type { RequestKind, RequestShape } from "../core/types.ts";
+import { preview, sha1 } from "../core/util.ts";
 
 export interface ContentBlock {
   type: string;
@@ -25,38 +26,6 @@ export interface AnthropicRequestBody {
   thinking?: unknown;
   metadata?: { user_id?: string };
   [key: string]: unknown;
-}
-
-/**
- * `main`  - the agent loop that answers the user (carries the tool set).
- * `aux`   - Claude Code's background calls: conversation titles, topic
- *           detection, quota probes, compaction summaries. These must never
- *           open a new turn.
- * `other` - anything that is not a Messages API call (token counting, etc).
- */
-export type RequestKind = "main" | "aux" | "other";
-
-export interface RequestShape {
-  sessionId: string;
-  /** Set on requests issued by a subagent (Task tool), from x-claude-code-agent-id. */
-  agentId?: string;
-  parentAgentId?: string;
-  kind: RequestKind;
-  /** Stable identity of the user input that started the current turn. */
-  turnKey: string;
-  /** Short human label for the turn, taken from the user's own words. */
-  turnLabel: string;
-  model?: string;
-  stream: boolean;
-  messageCount: number;
-  toolCount: number;
-  toolNames: string[];
-  systemChars: number;
-  thinking: boolean;
-  /** Text of the user message that opened the turn. */
-  userText: string;
-  /** Tool results being fed back in this request, if any. */
-  toolResults: Array<{ tool_use_id?: string; is_error?: boolean; preview: string }>;
 }
 
 /**
@@ -158,6 +127,17 @@ export function sessionIdOf(body: AnthropicRequestBody, headers: Record<string, 
   return "anon-unknown";
 }
 
+/** The Anthropic-specific half of a `RequestShape`, carried in `detail`. */
+export interface ClaudeDetail {
+  toolCount: number;
+  toolNames: string[];
+  systemChars: number;
+  thinking: boolean;
+  /** Tool results being fed back in this request, if any. */
+  toolResults: Array<{ tool_use_id?: string; is_error?: boolean; preview: string }>;
+  [key: string]: unknown;
+}
+
 export function describeRequest(
   body: AnthropicRequestBody,
   headers: Record<string, string>,
@@ -222,11 +202,13 @@ export function describeRequest(
     model: body.model,
     stream: body.stream === true,
     messageCount: messages.length,
-    toolCount: tools.length,
-    toolNames: tools.map((t) => t.name ?? "?").filter(Boolean),
-    systemChars,
-    thinking: body.thinking != null,
     userText,
-    toolResults,
+    detail: {
+      toolCount: tools.length,
+      toolNames: tools.map((t) => t.name ?? "?").filter(Boolean),
+      systemChars,
+      thinking: body.thinking != null,
+      toolResults,
+    } satisfies ClaudeDetail,
   };
 }
