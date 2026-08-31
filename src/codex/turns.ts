@@ -78,21 +78,29 @@ function findAnchor(input: InputItem[]): { index: number; item: InputItem } | un
 /**
  * Codex declares its tools as one `additional_tools` input item rather than a
  * top-level `tools` array, and nests a `collaboration` sub-agent namespace
- * inside it - so tool names need a small recursive walk, not a flat map.
+ * inside it - so tools need a small recursive walk, not a flat map. Exported
+ * so render.ts can walk the same structure to show full tool definitions,
+ * not just their names.
  */
-function toolNamesOf(input: InputItem[]): string[] {
-  const additional = input.find((item) => item.type === "additional_tools");
-  const names: string[] = [];
-  const walk = (list: unknown): void => {
-    if (!Array.isArray(list)) return;
-    for (const t of list as Array<Record<string, unknown>>) {
+export function flattenTools(list: unknown): Array<Record<string, unknown>> {
+  const out: Array<Record<string, unknown>> = [];
+  const walk = (l: unknown): void => {
+    if (!Array.isArray(l)) return;
+    for (const t of l as Array<Record<string, unknown>>) {
       if (!t) continue;
       if (t.type === "namespace") walk(t.tools);
-      else if (typeof t.name === "string") names.push(t.name);
+      else out.push(t);
     }
   };
-  walk(additional?.tools);
-  return names;
+  walk(list);
+  return out;
+}
+
+function toolNamesOf(input: InputItem[]): string[] {
+  const additional = input.find((item) => item.type === "additional_tools");
+  return flattenTools(additional?.tools)
+    .map((t) => t.name)
+    .filter((n): n is string => typeof n === "string");
 }
 
 /**

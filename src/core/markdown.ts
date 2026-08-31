@@ -81,6 +81,22 @@ export function details(summary: string, body: string, open = false): string {
   return `<details${open ? " open" : ""}>\n<summary>${summary}</summary>\n\n${body}\n\n</details>`;
 }
 
+/**
+ * A collapsed "Tool details" section beneath the dense tool-name list: one
+ * more collapse per tool, each opening onto that tool's full definition
+ * (description, schema, everything else it declared) - so how bulky a tool
+ * is can be seen without opening request.json.
+ */
+export function toolDetails(tools: Array<Record<string, unknown>>): string {
+  if (tools.length === 0) return "";
+  const body = tools
+    .map((t, i) =>
+      details(typeof t.name === "string" ? `\`${t.name}\`` : `tool ${i + 1}`, json(t)),
+    )
+    .join("\n\n");
+  return details(`Tool details — ${tools.length} tool${tools.length === 1 ? "" : "s"}`, body);
+}
+
 export function table(rows: Array<[string, string]>): string {
   return [
     "| | |",

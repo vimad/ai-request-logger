@@ -5,8 +5,9 @@
  * function here is a pure function of the JSON already on disk, so the same
  * code runs live inside the proxy and offline in `report.ts`.
  */
-import { block, bytes, details, duration, json, num, table } from "../core/markdown.ts";
+import { block, bytes, details, duration, json, num, table, toolDetails } from "../core/markdown.ts";
 import type { ProviderRenderer, RenderRequestOptions, TokenBreakdown } from "../core/types.ts";
+import { flattenTools } from "./turns.ts";
 
 /* ------------------------------------------------------------- token math */
 
@@ -67,11 +68,10 @@ function renderItem(item: any, opts: { compact?: boolean } = {}): string {
   const compact = opts.compact === true;
   switch (item?.type) {
     case "additional_tools": {
-      const names = (Array.isArray(item.tools) ? item.tools : [])
-        .flatMap((t: any) => (t?.type === "namespace" ? (t.tools ?? []) : [t]))
-        .map((t: any) => t?.name)
-        .filter(Boolean);
-      return `**🧰 Tools declared** — ${names.length}: ${names.map((n: string) => `\`${n}\``).join(" · ")}`;
+      const tools = flattenTools(item.tools);
+      const names = tools.map((t) => t.name).filter((n): n is string => typeof n === "string");
+      const declared = `**🧰 Tools declared** — ${names.length}: ${names.map((n) => `\`${n}\``).join(" · ")}`;
+      return tools.length > 0 ? `${declared}\n\n${toolDetails(tools)}` : declared;
     }
     case "message": {
       const text = textOfContent(item.content);

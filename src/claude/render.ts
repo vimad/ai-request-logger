@@ -4,7 +4,7 @@
  * already on disk, so the same code runs live inside the proxy and offline in
  * `report.ts`.
  */
-import { block, bytes, details, duration, json, num, table } from "../core/markdown.ts";
+import { block, bytes, details, duration, json, num, table, toolDetails } from "../core/markdown.ts";
 import type {
   ProviderRenderer,
   RenderRequestOptions,
@@ -260,6 +260,9 @@ export function renderRequest(req: any, res: any, opts: RenderRequestOptions = {
         shape.toolNames.map((n: string) => `\`${n}\``).join(" · "),
       ),
     );
+    if (Array.isArray(body.tools) && body.tools.length > 0) {
+      out.push(toolDetails(body.tools));
+    }
   }
 
   out.push("### Parameters");
