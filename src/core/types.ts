@@ -127,6 +127,13 @@ export interface BannerNotes {
   credentials?: string;
   /** What this provider files under `turn-000__background/`. */
   backgroundTurn?: string;
+  /**
+   * Overrides the default `$ENV_VAR=<base> <client>` copy-paste line, for a
+   * client that has no persistent env var and must be pointed at the proxy
+   * some other way (CLI flags, a config override) on every invocation.
+   * Called with the proxy's own `http://host:port` base URL.
+   */
+  invocation?(base: string): string;
 }
 
 export interface Provider {

@@ -178,12 +178,20 @@ export function createHandler({ cfg, store, onLine }: ProxyDeps) {
           });
 
           up.on("error", (err) => {
+            // A client that disconnects the moment it has what it needs (the
+            // Codex CLI does this reliably) makes the *upstream* socket error
+            // after the whole reply already arrived. Finish the same way a
+            // clean end would, so the capture is not thrown away - just
+            // labelled - for what is normal traffic wearing an error shape.
             res.destroy();
-            void entry.finish({ status, error: `upstream stream error: ${err.message}` });
+            const message = `upstream stream error: ${err.message}`;
+            sink.end();
+            sink.on("close", () => finish(message));
+            if (sink.writableEnded && sink.readableEnded) finish(message);
           });
 
           let finished = false;
-          function finish(): void {
+          function finish(errorMessage?: string): void {
             if (finished) return;
             finished = true;
             let events: SseEvent[] = [];
@@ -209,6 +217,7 @@ export function createHandler({ cfg, store, onLine }: ProxyDeps) {
             void entry
               .finish({
                 status,
+                error: errorMessage,
                 headers: up.headers,
                 body,
                 message,

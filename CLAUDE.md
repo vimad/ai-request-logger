@@ -7,7 +7,8 @@ built-in TypeScript support. Node 22.18+.
 ```bash
 npm start                # run the proxy for Claude Code
 npm run start:cursor     # ... for the Cursor CLI (`agent`)
-npm run dev              # same, with --watch (dev:cursor too)
+npm run start:codex      # ... for the Codex CLI (`codex`)
+npm run dev              # same, with --watch (dev:cursor, dev:codex too)
 npm test                 # node --test, ~1s, no network
 npx tsc --noEmit         # typecheck src/ and test/
 npm run report           # re-render a captured log tree
@@ -17,8 +18,10 @@ npm run report           # re-render a captured log tree
 
 `src/core/` is a provider-agnostic proxy; everything vendor-specific sits behind
 the `Provider` interface in `src/core/types.ts` and lives in `src/<provider>/`.
-`src/claude/` is the reference implementation; `src/cursor/` is the second, and
-shows what a binary (protobuf/Connect) harness needs.
+`src/claude/` is the reference implementation; `src/cursor/` shows what a binary
+(protobuf/Connect) harness needs; `src/codex/` shows what a JSON harness whose
+transport lies about itself needs (see [docs/cursor.md](./docs/cursor.md) and
+[docs/codex.md](./docs/codex.md)).
 
 ## Adding support for a new AI harness
 
@@ -34,6 +37,7 @@ directory.
 | [docs/testing.md](./docs/testing.md) | How the suite is split; what to write for a new provider |
 | [docs/log-format.md](./docs/log-format.md) | The on-disk records and the rules renderers must obey |
 | [docs/cursor.md](./docs/cursor.md) | The Cursor CLI provider: its protocol, and the traps in it |
+| [docs/codex.md](./docs/codex.md) | The Codex CLI provider: its protocol, and the traps in it |
 
 The recipe in short: capture real traffic first with the proxy running and no
 provider written, write `src/<name>/{index,turns,messages,render}.ts`, register
@@ -64,6 +68,21 @@ it in `src/providers.ts`, mirror the tests under `test/<name>/`.
 `agent --endpoint http://127.0.0.1:8787` (or `CURSOR_API_ENDPOINT`). It also
 needs `{"network": {"useHttp1ForAgent": true}}` in `~/.cursor/cli-config.json` —
 on HTTP/2 the CLI bypasses the proxy silently and the log stays empty.
+
+## Using the Codex provider
+
+There is no base-URL env var — Codex refuses to let you override its built-in
+`openai` provider. Point it at a new named provider instead, on every
+invocation (the banner prints this exact line):
+
+```bash
+codex -c model_providers.local.name="local" \
+      -c model_providers.local.base_url="http://127.0.0.1:8787" \
+      -c model_providers.local.wire_api="responses" \
+      -c model_provider="local"
+```
+
+Existing `codex login` (ChatGPT) or API key auth keeps working unchanged.
 
 ## Notes
 

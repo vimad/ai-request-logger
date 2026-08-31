@@ -16,7 +16,7 @@
                                          │  implemented by
                     ┌────────────────────┼────────────────────┐
                     ▼                    ▼                    ▼
-              src/claude/           src/cursor/         src/codex/  (yours)
+              src/claude/           src/cursor/         src/codex/
 ```
 
 `src/core/` is a transparent reverse proxy that happens to keep a very
@@ -53,6 +53,11 @@ src/
     render.ts           the transcript and the context-window table
     protobuf.ts         a schema-free protobuf reader
     connect.ts          Connect envelope framing and per-frame gzip
+  codex/                ← the third provider: JSON, but a lying transport
+    index.ts            the Provider object
+    turns.ts            input-array turn identity; request_kind from a header
+    messages.ts         response.output_item events → one response object
+    render.ts           input/output items and the token table
 ```
 
 ★ Read `src/core/types.ts` first. It is short, and it is the whole agreement.

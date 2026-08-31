@@ -44,19 +44,30 @@ server.listen(cfg.port, cfg.host, () => {
     console.log("");
   }
   console.log(c.bold("  Point your client at it"));
-  console.log(c.dim("  ── one-off, in another terminal ────────────────────────────"));
-  console.log(`    ${c.green(`${envVar}=${base} ${client}`)}`);
-  console.log("");
-  console.log(c.dim("  ── for the whole shell session ─────────────────────────────"));
-  console.log(`    ${c.green(`export ${envVar}=${base}`)}`);
-  console.log(`    ${c.green(client)}`);
+  if (notes.invocation) {
+    console.log(c.dim("  ── every invocation, since there is no env var override ────"));
+    console.log(`    ${c.green(notes.invocation(base))}`);
+  } else {
+    console.log(c.dim("  ── one-off, in another terminal ────────────────────────────"));
+    console.log(`    ${c.green(`${envVar}=${base} ${client}`)}`);
+    console.log("");
+    console.log(c.dim("  ── for the whole shell session ─────────────────────────────"));
+    console.log(`    ${c.green(`export ${envVar}=${base}`)}`);
+    console.log(`    ${c.green(client)}`);
+  }
   if (notes.projectConfig) {
     console.log("");
     console.log(c.dim(`  ── persist for one project (${notes.projectConfig}) ───`));
     console.log(c.green(`    { "env": { "${envVar}": "${base}" } }`));
   }
   console.log("");
-  console.log(c.dim(`  Stop logging: unset ${envVar} (or drop the env block).`));
+  console.log(
+    c.dim(
+      notes.invocation
+        ? "  Stop logging: stop passing the overrides above."
+        : `  Stop logging: unset ${envVar} (or drop the env block).`,
+    ),
+  );
   if (notes.credentials) console.log(c.dim(`  ${notes.credentials}`));
   console.log("");
   console.log(c.bold("  Log layout"));

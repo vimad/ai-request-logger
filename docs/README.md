@@ -1,13 +1,15 @@
 # Architecture docs
 
 This directory explains how `ai-request-logger` is put together, and — the point
-of it — **how to teach it a new AI harness** (Cursor, Codex, Aider, an internal
-gateway) without touching the proxy itself.
+of it — **how to teach it a new AI harness** (Aider, an internal gateway, …)
+without touching the proxy itself.
 
-The repo started as a Claude-Code-only proxy. It is now a generic proxy plus two
-*providers*. Claude is not privileged; it is the worked example that every doc
-here points at. Cursor is the second, and the one to read when your harness does
-not speak JSON.
+The repo started as a Claude-Code-only proxy. It is now a generic proxy plus
+three *providers*. Claude is not privileged; it is the worked example that
+every doc here points at. Cursor is the one to read when your harness does not
+speak JSON. Codex is the one to read when your harness speaks JSON but lies
+about its own transport (no `content-type` on a real SSE stream, a client that
+disconnects the moment it has what it needs).
 
 ## Read in this order
 
@@ -19,6 +21,7 @@ not speak JSON.
 | [testing.md](./testing.md) | How the suite is split, and what to write for a new provider |
 | [log-format.md](./log-format.md) | The on-disk tree, and which parts a provider controls |
 | [cursor.md](./cursor.md) | The Cursor CLI provider: its protocol, and what it took to read it |
+| [codex.md](./codex.md) | The Codex CLI provider: its protocol, and what it took to read it |
 
 ## The one-paragraph version
 

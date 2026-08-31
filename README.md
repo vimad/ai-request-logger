@@ -11,12 +11,15 @@ calls to the model — think, run a tool, read the result, think again. Those ar
 the **provider requests**, and they are numbered inside the turn they belong to.
 
 The proxy core is provider-agnostic; everything that knows about a particular
-API lives behind a small `Provider` interface. **Claude Code / the Anthropic
-Messages API** is the provider that ships today.
+API lives behind a small `Provider` interface. Three providers ship today:
+**Claude Code** (the Anthropic Messages API), the **Cursor CLI** (`agent`), and
+the **Codex CLI** (`codex`, OpenAI's Responses API).
 
-> **Extending it to another harness (Cursor, Codex, an internal gateway)?**
+> **Extending it to another harness (Aider, an internal gateway, …)?**
 > Start at [`docs/`](./docs/) — architecture, the provider contract, a
 > step-by-step recipe, the testing strategy and the log format.
+> [docs/cursor.md](./docs/cursor.md) and [docs/codex.md](./docs/codex.md) are
+> worked examples of what it took to read a real, undocumented protocol.
 
 No npm install, no `node_modules`, no build step. It runs straight off Node's
 built-in TypeScript support.
@@ -29,21 +32,26 @@ Node **22.18+** (24.x recommended). Nothing else.
 
 ```bash
 node src/index.ts          # or: npm start
+npm run start:cursor       # ... for the Cursor CLI (`agent`)
+npm run start:codex        # ... for the Codex CLI (`codex`)
 ```
 
-It prints the exact command to start Claude Code against it. The short version:
+It prints the exact command to point that client at it. For the default
+(Claude Code), the short version:
 
 ```bash
 ANTHROPIC_BASE_URL=http://127.0.0.1:8787 claude
 ```
 
-To stop logging, drop the env var. Nothing about your install changes.
+To stop logging, drop the env var. Nothing about your install changes. Codex
+has no such env var — it needs a `-c` config override instead, which the
+banner prints for you; see [docs/codex.md](./docs/codex.md).
 
 ### Options
 
 | Flag | Env | Default |
 | --- | --- | --- |
-| `--provider` | `LOGGER_PROVIDER` | `claude` |
+| `--provider` | `LOGGER_PROVIDER` | `claude` (also: `cursor`, `codex`) |
 | `--port` | `LOGGER_PORT` | `8787` |
 | `--host` | `LOGGER_HOST` | `127.0.0.1` |
 | `--upstream` | `LOGGER_UPSTREAM` | the provider's default (`https://api.anthropic.com`) |
@@ -238,7 +246,9 @@ export const cursor: Provider = {
 Drop it in `src/cursor/`, add it to `src/providers.ts`, and run with
 `--provider cursor`. Nothing in `src/core` changes: the forwarding, the log
 tree, the turn/session rollups and the offline report all work off the
-`Provider` contract alone.
+`Provider` contract alone. `src/cursor/` and `src/codex/` are exactly this,
+already built — the ones to read for a binary wire format and for a JSON API
+whose transport lies about itself, respectively.
 
 The full recipe — including how to capture real traffic before you write any
 code, the `turnKey` rules, and the checklist — is in
