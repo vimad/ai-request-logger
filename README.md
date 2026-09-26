@@ -63,6 +63,19 @@ banner prints for you; see [docs/codex.md](./docs/codex.md).
 Point `--upstream` at Bedrock, Vertex, or another gateway and it forwards there
 instead.
 
+## See it: Agent X-Ray
+
+```bash
+npm run viz                # http://127.0.0.1:8790
+```
+
+This is an animated, clickable replay of any captured Claude Code turn, made for
+explaining how a coding agent works. You can watch the loop lap by lap and see
+what each request re-sends. Every block is labelled by who wrote it: you, the
+harness, the model, or a tool. You can read the full system prompt and every
+tool definition, and the background calls you never see are called out. It
+reads `log/` and nothing else. See [docs/visualizer.md](./docs/visualizer.md).
+
 ## What lands on disk
 
 ```

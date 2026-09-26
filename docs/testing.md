@@ -41,6 +41,10 @@ test/
     e2e.test.ts         a whole CLI session through the proxy
     upstream.ts         the mock Cursor server
     encode.ts           protobuf/Connect encoders for building wire fixtures
+  viz/
+    digest.test.ts      a real captured turn → the visualizer's model: dedup,
+                        echoes, roles, purposes
+    server.test.ts      read-only, and nothing outside the log dir is served
   helpers/
     harness.ts          proxy + mock upstream + throwaway log dir
 ```

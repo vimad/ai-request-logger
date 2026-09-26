@@ -12,6 +12,7 @@ npm run dev              # same, with --watch (dev:cursor, dev:codex too)
 npm test                 # node --test, ~1s, no network
 npx tsc --noEmit         # typecheck src/ and test/
 npm run report           # re-render a captured log tree
+npm run viz              # Agent X-Ray: animated turn replay at :8790
 ```
 
 ## Architecture in one line
@@ -38,6 +39,7 @@ directory.
 | [docs/log-format.md](./docs/log-format.md) | The on-disk records and the rules renderers must obey |
 | [docs/cursor.md](./docs/cursor.md) | The Cursor CLI provider: its protocol, and the traps in it |
 | [docs/codex.md](./docs/codex.md) | The Codex CLI provider: its protocol, and the traps in it |
+| [docs/visualizer.md](./docs/visualizer.md) | Agent X-Ray (`src/viz/`): the read-only teaching visualizer |
 
 The recipe in short: capture real traffic first with the proxy running and no
 provider written, write `src/<name>/{index,turns,messages,render}.ts`, register

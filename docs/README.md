@@ -22,6 +22,7 @@ disconnects the moment it has what it needs).
 | [log-format.md](./log-format.md) | The on-disk tree, and which parts a provider controls |
 | [cursor.md](./cursor.md) | The Cursor CLI provider: its protocol, and what it took to read it |
 | [codex.md](./codex.md) | The Codex CLI provider: its protocol, and what it took to read it |
+| [visualizer.md](./visualizer.md) | Agent X-Ray: the animated, clickable turn replay for teaching |
 
 ## The one-paragraph version
 

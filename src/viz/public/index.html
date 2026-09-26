@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent X-Ray</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%230b1020'/><circle cx='16' cy='16' r='9' fill='none' stroke='%23a78bfa' stroke-width='3'/><circle cx='16' cy='16' r='3' fill='%2338bdf8'/></svg>">
+  <link rel="stylesheet" href="app.css">
+  <script>
+    try { const t = localStorage.getItem("xray-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#/">
+      <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><circle cx="16" cy="16" r="11" fill="none" stroke="var(--c-system)" stroke-width="3"/><circle cx="16" cy="16" r="4" fill="var(--c-prompt)"/><path d="M16 1v6M16 25v6M1 16h6M25 16h6" stroke="var(--muted)" stroke-width="2"/></svg>
+      <span>Agent&nbsp;X‑Ray</span>
+    </a>
+    <nav class="crumbs" id="crumbs"></nav>
+    <div class="topbar-actions">
+      <span class="live" id="live" hidden></span>
+      <button class="icon-btn" id="help-btn" title="Keyboard shortcuts (?)">?</button>
+      <button class="icon-btn" id="theme-btn" title="Toggle theme (T)">◐</button>
+    </div>
+  </header>
+  <main id="app"></main>
+  <aside class="drawer" id="drawer" aria-hidden="true">
+    <div class="drawer-scrim" data-close></div>
+    <div class="drawer-panel" role="dialog" aria-label="Details">
+      <button class="icon-btn drawer-close" data-close title="Close (Esc)">✕</button>
+      <div class="drawer-body" id="drawer-body"></div>
+    </div>
+  </aside>
+  <div class="help" id="help" hidden>
+    <div class="help-card">
+      <h3>Keyboard</h3>
+      <dl>
+        <dt>Space</dt><dd>Play / pause the loop</dd>
+        <dt>← →</dt><dd>Step backward / forward</dd>
+        <dt>Home / End</dt><dd>First / last step</dd>
+        <dt>1 – 4</dt><dd>Speed 0.5× · 1× · 2× · 4×</dd>
+        <dt>N</dt><dd>Toggle narration</dd>
+        <dt>F</dt><dd>Present the stage full-screen</dd>
+        <dt>T</dt><dd>Light / dark theme</dd>
+        <dt>Esc</dt><dd>Close panels</dd>
+      </dl>
+      <button class="btn" data-close-help>Got it</button>
+    </div>
+  </div>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

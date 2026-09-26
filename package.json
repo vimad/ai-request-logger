@@ -17,6 +17,8 @@
     "dev": "node --watch src/index.ts",
     "dev:cursor": "node --watch src/index.ts --provider cursor",
     "dev:codex": "node --watch src/index.ts --provider codex",
+    "viz": "node src/viz/server.ts",
+    "dev:viz": "node --watch src/viz/server.ts",
     "typecheck": "tsc --noEmit",
     "report": "node src/core/report.ts",
     "test": "node --test \"test/**/*.test.ts\""
