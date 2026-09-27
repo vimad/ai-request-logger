@@ -64,6 +64,11 @@ function share(part, whole) {
 function narrate(turn, step) {
   const r = step.r;
   const who = turn.harness.name;
+  // Where the loop runs: on your machine (Claude Code, Codex) or on the
+  // vendor's servers (Cursor), and whether token counts are billing or context.
+  const remote = turn.harness.remoteLoop;
+  const contextOnly = turn.harness.usage === "context";
+  const out = (t) => (contextOnly ? "" : ` ${fmt.n(t?.output)} tokens out`);
   const stopCode = `<code>${esc(turn.harness.stopField)}: ${esc(r?.stopReason ?? r?.stop ?? "")}</code>`;
   const tok = (chars) => fmt.k(chars * turn.tokPerChar);
   const mains = turn.requests.filter(isMain);
@@ -84,7 +89,7 @@ function narrate(turn, step) {
       if (!r.diff.hasPrev) {
         const reminders = r.messages.flatMap((m) => m.refs).filter((x) => turn.blobs[x.b]?.cat === "reminder").length;
         return {
-          title: `Lap ${step.lap} · ${who} packs the first request`,
+          title: `Lap ${step.lap} · ${remote ? `${who}'s server` : who} packs the first request`,
           body: `It is much more than your prompt: the <b>system prompt</b> (${fmt.chars(sys?.chars ?? 0)}), <b>${r.tools.length} tool definitions</b> (${fmt.chars(tools?.chars ?? 0)}) and the conversation, where your prompt sits next to <b>${reminders} block${reminders === 1 ? "" : "s"} of injected context</b>. About <b>${tok(r.sentChars)} tokens</b> in all. Your own words are <b>${share(promptChars, r.sentChars)}</b> of it.`,
         };
       }
@@ -112,13 +117,19 @@ function narrate(turn, step) {
       for (const [k, n] of Object.entries(counts)) newBits.push(`${words[k] ?? k}${n > 1 ? ` ×${n}` : ""}`);
       return {
         title: `Lap ${step.lap} · Everything again, plus what's new`,
-        body: `The model kept nothing from the last lap, so ${who} sends the whole thing again: <b>${share(r.diff.carriedChars, r.sentChars)}</b> of this request is exactly what it sent last time. New this lap: <b>${newBits.join(" · ") || "nothing"}</b>. This is how an agent "remembers".`,
+        body: `The model kept nothing from the last lap, so ${remote ? `${who}'s server` : who} sends the whole thing again: <b>${share(r.diff.carriedChars, r.sentChars)}</b> of this request is exactly what it sent last time. New this lap: <b>${newBits.join(" · ") || "nothing"}</b>. This is how an agent "remembers".${remote ? ` Your machine never sees this request: ${who} keeps the conversation on ${remote} and streams down only the new pieces.` : ""}`,
       };
     }
     case "think": {
       const t = r.tokens;
-      if (!t) return { title: "The model reads the request", body: `No usage was reported for this call${r.status ? ` (HTTP ${r.status})` : ""}.` };
+      if (!t) return { title: "The model reads the request", body: `No usage was reported for this call${r.status ? ` (HTTP ${r.status})` : ""}.${r.ttfbMs ? ` First output after <b>${fmt.ms(r.ttfbMs)}</b>.` : ""}` };
       const total = promptTokens(t);
+      if (contextOnly) {
+        return {
+          title: `The model reads ${fmt.n(total)} tokens`,
+          body: `That is how full ${who} says the context window was${r.params.contextWindow ? ` (${esc(r.params.contextWindow)})` : ""}. ${who} reports no cache or billing split, so there is nothing to say about what was cached.${r.ttfbMs ? ` First output after <b>${fmt.ms(r.ttfbMs)}</b>.` : ""}`,
+        };
+      }
       const fresh = t.input + t.cacheWrite;
       return {
         title: `The model reads ${fmt.n(total)} tokens`,
@@ -137,13 +148,15 @@ function narrate(turn, step) {
         const names = [...new Set(toolCalls(turn, r).map((b) => b.name))].join(", ");
         return {
           title: `It answers with a tool call: ${names}`,
-          body: `${stopCode}. The model can't touch your machine, so it asks ${who} to run something for it.${think} ${fmt.n(t?.output)} tokens out, in ${fmt.ms(r.durationMs)}.`,
+          body: remote
+            ? `${stopCode}. The model can't touch your machine, and here neither can ${remote}: the server sends the call down the stream to the CLI.${think}${out(t)}${contextOnly ? "" : "."} In ${fmt.ms(r.durationMs)}.`
+            : `${stopCode}. The model can't touch your machine, so it asks ${who} to run something for it.${think}${out(t)}, in ${fmt.ms(r.durationMs)}.`,
         };
       }
       if (r.stop === "end_turn") {
-        return { title: "It answers in plain text", body: `${stopCode}. There's no tool call this time, so the loop stops here.${think} ${fmt.n(t?.output)} tokens out.` };
+        return { title: "It answers in plain text", body: `${stopCode}. There's no tool call this time, so the loop stops here.${think}${out(t)}${contextOnly ? "" : "."}` };
       }
-      return { title: `The stream ends: ${r.stopReason ?? "no stop reason"}`, body: `${fmt.n(t?.output)} tokens out.` };
+      return { title: `The stream ends: ${r.stopReason ?? "no stop reason"}`, body: contextOnly ? `In ${fmt.ms(r.durationMs)}.` : `${fmt.n(t?.output)} tokens out.` };
     }
     case "tool": {
       const gap = step.next ? step.next.start - (r.start + (r.durationMs ?? 0)) : undefined;
@@ -151,9 +164,10 @@ function narrate(turn, step) {
         ? step.next.messages.flatMap((m) => m.refs).map((x) => turn.blobs[x.b]).filter((b) => b?.cat === "tool_result" && step.calls.some((c) => c.toolUseId === b.toolUseId)).reduce((n, b) => n + b.chars, 0)
         : 0;
       const list = step.calls.map((c) => `<code>${esc(c.label)}</code>`).join(", ");
+      const names = [...new Set(step.calls.map((c) => c.name))].join(" + ");
       return {
-        title: `${who} runs ${[...new Set(step.calls.map((c) => c.name))].join(" + ")} on your machine`,
-        body: `${list}. The output${outChars ? ` (${fmt.chars(outChars)})` : ""} goes onto the end of the conversation.${gap !== undefined ? ` Time on your side before the next lap: <b>${fmt.ms(gap)}</b>${gap > 4000 ? ", which includes you answering any permission prompt" : ""}.` : ""}`,
+        title: remote ? `Your machine runs ${names} for ${who}` : `${who} runs ${names} on your machine`,
+        body: `${list}. ${remote ? `The CLI uploads the output${outChars ? ` (${fmt.chars(outChars)})` : ""} and ${who}'s server puts it on the end of the conversation.` : `The output${outChars ? ` (${fmt.chars(outChars)})` : ""} goes onto the end of the conversation.`}${gap !== undefined ? ` Time on your side before the next lap: <b>${fmt.ms(gap)}</b>${gap > 4000 ? ", which includes you answering any permission prompt" : ""}.` : ""}`,
       };
     }
     case "answer": {
@@ -161,7 +175,7 @@ function narrate(turn, step) {
       const tOut = mains.reduce((n, x) => n + (x.tokens?.output ?? 0), 0);
       return {
         title: "The answer lands in your terminal",
-        body: `${mains.length} lap${mains.length === 1 ? "" : "s"}: <b>${fmt.n(tIn)}</b> tokens read, <b>${fmt.n(tOut)}</b> written. You see one reply. The model read the whole conversation ${mains.length} time${mains.length === 1 ? "" : "s"} to write it.`,
+        body: `${mains.length} lap${mains.length === 1 ? "" : "s"}: <b>${fmt.n(tIn)}</b> tokens read${contextOnly ? ` (${who} does not report output tokens)` : `, <b>${fmt.n(tOut)}</b> written`}. You see one reply. The model read the whole conversation ${mains.length} time${mains.length === 1 ? "" : "s"} to write it.`,
       };
     }
     case "bg": {
@@ -222,8 +236,8 @@ function stageSvg(info) {
   const tower = s("g");
   const harness = s("g", null, harnessBox, lap,
     s("text", { x: 252, y: 247, class: "node-title" }, info.name),
-    s("text", { x: 252, y: 266, class: "node-sub" }, "the harness · runs on your laptop"),
-    s("text", { x: 252, y: 284, class: "node-sub" }, "keeps the conversation"),
+    s("text", { x: 252, y: 266, class: "node-sub" }, info.remoteLoop ? `the agent · runs on ${info.remoteLoop}` : "the harness · runs on your laptop"),
+    s("text", { x: 252, y: 284, class: "node-sub" }, info.remoteLoop ? "keeps the conversation · your CLI shows it" : "keeps the conversation"),
     s("rect", { x: 486, y: 228, width: 34, height: 144, rx: 6, fill: "var(--line)" }),
     tower, status);
 
@@ -273,6 +287,7 @@ function stageSvg(info) {
 
 export function theater(ctx) {
   const { turn } = ctx;
+  const contextOnly = turn.harness.usage === "context";
   const steps = buildSteps(turn);
   const st = stageSvg(turn.harness);
   const maxChars = Math.max(1, ...turn.requests.map((r) => r.sentChars));
@@ -470,20 +485,22 @@ export function theater(ctx) {
         const freshW = tk ? ((tk.input + tk.cacheWrite) / total) * 160 : 0;
         const ok1 = await tweenNum(base * 0.35, t, (e) => {
           st.readCache.setAttribute("width", cacheW * e);
-          st.readText.textContent = tk ? `cache ${fmt.k(tk.cacheRead * e)} · new ${fmt.k(0)}` : "no usage reported";
+          st.readText.textContent = !tk ? "no usage reported" : contextOnly ? `context ${fmt.k(0)}` : `cache ${fmt.k(tk.cacheRead * e)} · new ${fmt.k(0)}`;
         });
         if (!ok1) return false;
         st.readFresh.setAttribute("x", 790 + cacheW);
         return tweenNum(base * 0.65, t, (e) => {
           st.readFresh.setAttribute("width", freshW * e);
-          if (tk) st.readText.textContent = `cache ${fmt.k(tk.cacheRead)} · new ${fmt.k((tk.input + tk.cacheWrite) * e)}`;
+          if (tk) st.readText.textContent = contextOnly ? `context ${fmt.k(tk.input * e)}` : `cache ${fmt.k(tk.cacheRead)} · new ${fmt.k((tk.input + tk.cacheWrite) * e)}`;
         });
       }
       case "reply": {
         st.modelBox.classList.add("active-box");
         const cats = r.response.map((x) => turn.blobs[x.b]?.cat ?? "assistant");
         if (r.status >= 400 || !cats.length) cats.push(r.status >= 400 ? "other" : "assistant");
-        const n = Math.max(6, Math.min(22, Math.round((r.tokens?.output ?? 40) / 6)));
+        // Without an output count (Cursor), size the reply by what came back.
+        const outTok = r.tokens?.output || Math.round(r.response.reduce((k, x) => k + (turn.blobs[x.b]?.chars ?? 0), 0) * turn.tokPerChar) || 40;
+        const n = Math.max(6, Math.min(22, Math.round(outTok / 6)));
         const dots = [];
         for (let d = 0; d < n; d++) {
           const cat = cats[Math.min(cats.length - 1, Math.floor((d / n) * cats.length))];
@@ -767,7 +784,9 @@ export function theater(ctx) {
     h("div", { class: "section-head" },
       h("span", { class: "kicker" }, "01 · The agent loop"),
       h("h2", null, "Watch the turn happen"),
-      h("p", null, `Press play, or step with ← →. ${turn.harness.name} runs on your machine; the model lives behind an API and remembers nothing between calls. Every lap round this loop is one HTTP request, and every request carries the whole conversation.`)),
+      h("p", null, turn.harness.remoteLoop
+        ? `Press play, or step with ← →. Here the loop runs on ${turn.harness.remoteLoop}, not on your machine: the server calls the model, and your machine only runs the tools it is sent. The model still remembers nothing between calls, so every lap carries the whole conversation.`
+        : `Press play, or step with ← →. ${turn.harness.name} runs on your machine; the model lives behind an API and remembers nothing between calls. Every lap round this loop is one HTTP request, and every request carries the whole conversation.`)),
     wrap);
 
   scene(0);

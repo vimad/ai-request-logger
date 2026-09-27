@@ -223,6 +223,7 @@ main { max-width: 1480px; margin: 0 auto; padding: 22px 22px 120px; }
 .stat .mini i { display: block; height: 100%; }
 
 .warn { padding: 10px 14px; border-radius: 10px; border: 1px solid var(--c-reminder); color: var(--c-reminder); background: color-mix(in srgb, var(--c-reminder) 10%, transparent); margin-bottom: 16px; }
+.note { padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line); border-left: 3px solid var(--c-system); background: color-mix(in srgb, var(--c-system) 6%, transparent); margin-bottom: 10px; font-size: 14px; line-height: 1.5; }
 
 /* ------------------------------------------------------------ theater */
 

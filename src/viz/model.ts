@@ -132,6 +132,11 @@ export interface VizRequest {
   /** The previous request on the same thread, for "what is new" diffs. */
   prevKey?: string;
   stream_?: StreamSummary;
+  /**
+   * The turn directory holding `dir`, when it is neither this turn nor the
+   * background turn (a Cursor run stream filed under an earlier turn).
+   */
+  rawTurn?: string;
 }
 
 /** What the page calls the harness, and how it words the parts that differ. */
@@ -146,6 +151,17 @@ export interface HarnessInfo {
   stopField: string;
   /** Overrides for a category's explanation, where this harness differs. */
   about: Partial<Record<Category, string>>;
+  /**
+   * Set when the agent loop runs on the vendor's servers rather than on your
+   * machine: where it runs ("Cursor's servers"). Your machine then only runs
+   * the tools it is sent, and the page words the loop that way.
+   */
+  remoteLoop?: string;
+  /**
+   * "context" when the harness reports only how full the context window was,
+   * with no output or cache split, so the page does not print zeros for them.
+   */
+  usage?: "billing" | "context";
 }
 
 export interface VizTurn {
@@ -159,6 +175,8 @@ export interface VizTurn {
   blobs: Record<string, Blob>;
   requests: VizRequest[];
   warnings: string[];
+  /** Things worth knowing about how this turn was rebuilt; not problems. */
+  notes: string[];
 }
 
 export interface TurnListing {
@@ -207,6 +225,21 @@ export interface VizAdapter {
   tokens(usage: unknown): TokenBreakdown;
   /** Take one request apart. `req` and `res` are request.json and response.json. */
   request(store: BlobStore, req: any, res: any, reqDir: string): RequestParts;
+  /**
+   * For a harness whose HTTP requests are not one per model call - Cursor
+   * runs the loop on its servers and streams one transcript for a whole run -
+   * build the turn's requests directly. `digest.ts` still sorts, keys and
+   * threads them. Adapters without it get the per-request path.
+   */
+  turn?(input: TurnInput): { requests: VizRequest[]; notes: string[]; warnings: string[] };
+  /** The home page's per-turn counts, for an adapter that has `turn`. */
+  listTurns?(sessionDir: string): Map<string, { requests: number; durationMs: number; tokens: number }>;
+}
+
+export interface TurnInput {
+  store: BlobStore;
+  sessionDir: string;
+  turnDir: string;
 }
 
 /* -------------------------------------------------------------- helpers */

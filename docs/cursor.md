@@ -108,6 +108,37 @@ of `text` / `reasoning` / `tool-call` parts. That JSON is the whole reason this
 provider is worth having: the entire prompt, every rule, skill and tool
 definition, and the model's replies are all in there.
 
+### What else the run stream carries
+
+Read off a real `agent -p` capture while teaching Agent X-Ray to replay Cursor
+turns (see [visualizer.md](./visualizer.md#cursor)):
+
+- **The agent loop runs on Cursor's servers.** The model is called from there.
+  The stream mirrors the server-side transcript down, and when the model wants
+  a tool, the server asks the CLI to run it.
+- A field-2 frame (logged as `run.start`) is mostly **the server asking the
+  CLI to execute a tool**: `1` is an exec id, then `5` glob/grep, `7` read,
+  `3` write, and so on. Only the first frame of a stream carries the run id at
+  `10.2`.
+- Field-1 control frames carry the stream: `4` is a reasoning-summary delta,
+  `1` a text delta, `7`/`2`/`3` a tool call dispatched / running / finished
+  (the call id at `57`, start and end epoch ms at `59` and `60`), and `25` is
+  the step's clock in epoch ms.
+- Field-4 frames that are not JSON are the server's stored records: `3`
+  `{1: summary text, 3: start, 4: end}` is a reasoning summary, `1`
+  `{1: text, 2: at}` the assistant text, and `1` `{1: root hash, 2: [turn
+  hashes], 9: [dynamic tool names]}` the conversation state. The conversation
+  is content-addressed: the hashes are sha256 of each stored blob (verified
+  for the JSON ones).
+- A second run in the same conversation re-sends none of the old
+  conversation, only what is new.
+- When the stream drops, the CLI reconnects with a new `RunSSE` and the server
+  replays the last messages, and may even dispatch a tool call again.
+
+On the `BidiAppend` side, the event's field number is its type: `1` a prompt,
+`2` a tool result or client state going up (`2.39` looks like the execution
+time), `7` a heartbeat every five seconds, `3` and `5` acknowledgements.
+
 ## Identity: what names a session, and what names a turn
 
 **The session is neither endpoint's own id.** `RunSSE`'s body carries only the

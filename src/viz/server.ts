@@ -134,8 +134,8 @@ if (import.meta.filename === process.argv[1]) {
     console.log(`  Agent X-Ray  ·  http://${host}:${port}`);
     console.log(`  reading      ${logDir}`);
     console.log("");
-    console.log("  Capture a turn with `npm start` + Claude Code, or `npm run start:codex` + Codex,");
-    console.log("  then pick it in the browser.");
+    console.log("  Capture a turn with `npm start` + Claude Code, `npm run start:codex` + Codex,");
+    console.log("  or `npm run start:cursor` + the Cursor CLI, then pick it in the browser.");
     console.log("");
   });
 }

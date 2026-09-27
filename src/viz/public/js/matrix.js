@@ -121,7 +121,7 @@ export function matrix(ctx) {
       const bg = isBackground(r);
       col.append(s("text", { x: p.x + colW / 2, y: 22, class: "lbl", "text-anchor": "middle" }, r.key));
       col.append(s("text", { x: p.x + colW / 2, y: 37, class: "sub", "text-anchor": "middle", style: `fill:${purposeColor(r.purpose)}` }, short(r.purpose.label)));
-      col.append(s("text", { x: p.x + colW / 2, y: 51, class: "sub", "text-anchor": "middle" }, r.status >= 400 ? `HTTP ${r.status}` : r.stopReason ?? ""));
+      col.append(s("text", { x: p.x + colW / 2, y: 51, class: "sub", "text-anchor": "middle" }, r.status >= 400 ? `HTTP ${r.status}` : r.stopReason ?? r.stop ?? ""));
       if (bg) col.append(s("rect", { x: p.x - 3, y: top - 3, width: colW + 6, height: p.bottom - top + 6, rx: 5, fill: "none", stroke: purposeColor(r.purpose), "stroke-dasharray": "3 3" }));
 
       for (const sg of p.segs) {

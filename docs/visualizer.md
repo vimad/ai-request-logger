@@ -20,10 +20,11 @@ The home page polls the log directory, so turns show up as you capture them.
 A turn page that is still growing offers a reload instead of rebuilding under
 you mid-explanation.
 
-**Claude Code and the Codex CLI.** Capture Codex traffic with
-`npm run start:codex` and the `codex -c …` line it prints; the page is the
-same, worded for Codex. Sessions from other providers (Cursor) are listed but
-cannot be opened.
+**Claude Code, the Codex CLI and the Cursor CLI.** Capture Codex traffic with
+`npm run start:codex` and the `codex -c …` line it prints, and Cursor with
+`npm run start:cursor` and `agent --endpoint http://127.0.0.1:8787`. The page
+is the same, worded for each harness. For Cursor it is rebuilt rather than
+read off the wire (see [Cursor](#cursor) below).
 
 ## What the page shows
 
@@ -74,6 +75,7 @@ src/viz/
   digest.ts      one turn directory → the model the page draws (shared)
   claude.ts      Claude Code adapter: Messages API requests → blobs
   codex.ts       Codex CLI adapter: Responses API requests → blobs
+  cursor.ts      Cursor CLI adapter: run-stream transcript → rebuilt model calls
   public/        vanilla ES modules, no build
     js/main.js       routing, home page, hero
     js/theater.js    the animated loop, the suitcase, the Gantt
@@ -145,11 +147,57 @@ The Responses API has no `system` / `tools` / `messages` split, just one flat
   output holds a tool call, `end_turn` when it does not. The page decides with
   `stop`, and shows `stopReason` as the wire spelled it.
 
+### Cursor
+
+Cursor does not fit the one-request-per-model-call shape, because **the agent
+loop runs on Cursor's servers**. No model request ever crosses the proxy. A
+turn is one or more long `RunSSE` responses that mirror the server's
+transcript down to the CLI, plus dozens of tiny `BidiAppend` calls going up
+(the prompt, tool results, acknowledgements, a heartbeat every 5 s). So
+`cursor.ts` implements the adapter's `turn()` hook and builds the requests
+itself:
+
+- Every `assistant` chat message in the run streams is one model call. What
+  the model read for it is everything before it in the conversation, and
+  what it answered is the message itself.
+- The transcript is carried across **all** the session's run streams in time
+  order. A later run re-sends nothing old (Cursor keeps the conversation
+  server-side), so turn 2's context comes partly from turn 1's stream.
+- Steps are assigned to turns by the `<user_query>` they answer, not by where
+  the logger filed the stream. A run opens before its prompt is sent, so the
+  first one lands in `turn-000` and the second prompt's run lands in turn 1.
+  `rawTurn` on each request points *Raw JSON* at the right directory.
+- A dropped stream reconnects and the server replays its last messages with
+  extra `providerOptions`. Messages are matched with `providerOptions` and
+  `id` stripped, so a replay counts once and the echo bands still line up.
+- Timing comes from the epoch-ms timestamps inside the frames (every `at` in
+  `stream.jsonl` is 0, since the core hands the provider the whole body). A
+  call starts when its input is complete: the prompt, or the last tool
+  result. First output is the first reasoning or text delta. Tool frames
+  don't count, because a reconnect replays them.
+- The reasoning is encrypted. The short summaries Cursor streams while the
+  model thinks become the thinking blocks.
+- The injected context is one ~28k user message. It is split at its top-level
+  tags (`<user_info>`, `<rules>`, `<agent_skills>`, `<dynamic_tools>`…), and
+  the sizes match Cursor's own context breakdown exactly.
+- Tool schemas are added on the server and never reach the CLI. Each known
+  tool name gets a small blob, and one stand-in blob is sized to what Cursor
+  reports, so the request is still drawn to scale.
+- Tokens are the context-window reading Cursor reports per step. There is no
+  cache or output split, so `HarnessInfo.usage` is `"context"` and the page
+  doesn't print zeros for them. `remoteLoop` rewords the narration: the
+  server packs each request, and your machine only runs the tools it is sent.
+
+The `BidiAppend` traffic is left out of the replay and summed up in a note on
+the page. It is all still in the log.
+
 ## Adding another provider
 
 Write a `VizAdapter` (see `model.ts`) that takes one request apart into the
 same blobs (categories and purposes are the vocabulary the front end speaks),
 give it a `HarnessInfo` (display name, API name, stop field, and any category
-explanations that differ), and register it in `ADAPTERS` in `digest.ts`. That
+explanations that differ), and register it in `ADAPTERS` in `digest.ts`. If
+the harness's HTTP requests are not one per model call, implement `turn()`
+(and `listTurns()` for the home page) instead, as `cursor.ts` does. That
 also flips `supported` in `listSessions()`. The front end should not need to
 change: every harness-specific word on the page comes from `turn.harness`.

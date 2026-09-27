@@ -33,7 +33,7 @@ export function inspector(ctx) {
       },
         h("div", { class: "k" }, `${r.key} `, h("span", { class: "faint", style: { fontWeight: 400 } }, `+${fmt.ms(r.start)}`)),
         h("div", { class: "p" }, r.purpose.label),
-        h("div", { class: "x" }, r.status >= 400 ? `HTTP ${r.status}` : `${r.stopReason ?? "-"} · ${t ? fmt.k(promptTokens(t)) + " in" : "-"}`)));
+        h("div", { class: "x" }, r.status >= 400 ? `HTTP ${r.status}` : `${r.stopReason ?? r.stop ?? "-"} · ${t ? fmt.k(promptTokens(t)) + " in" : "-"}`)));
     }
   }
 
@@ -321,18 +321,24 @@ function responseTab(ctx, r) {
   ] : [];
   const sum = parts.reduce((n, p) => n + p[1], 0) || 1;
 
+  // Some harnesses (Cursor) report only how full the context window was.
+  const contextOnly = turn.harness.usage === "context";
   const out = [
     h("div", { class: "kv" },
       kv("Status", r.status ?? "-"),
-      kv("Stop reason", r.stopReason ?? "-"),
+      kv("Stop reason", r.stopReason ?? (r.stop ? `${r.stop} (inferred)` : "-")),
       kv("First byte", fmt.ms(r.ttfbMs)),
       kv("Total", fmt.ms(r.durationMs)),
-      kv("Tokens in", t ? fmt.n(promptTokens(t)) : "-"),
-      kv("Tokens out", t ? fmt.n(t.output) : "-"),
+      kv(contextOnly ? "Context" : "Tokens in", t ? fmt.n(promptTokens(t)) : "-"),
+      kv("Tokens out", t && !contextOnly ? fmt.n(t.output) : "-"),
       r.thinkingTokens ? kv("…of which thinking", fmt.n(r.thinkingTokens)) : null,
-      r.stream_ ? kv("SSE events", fmt.n(r.stream_.events)) : null),
+      r.stream_ ? kv(turn.harness.remoteLoop ? "Stream frames" : "SSE events", fmt.n(r.stream_.events)) : null),
   ];
-  if (t) {
+  if (contextOnly) {
+    out.push(h("p", { class: "muted", style: { fontSize: "13px" } },
+      t ? `${turn.harness.name} reports how full the context window was when the model read this request${r.params.contextWindow ? ` (${r.params.contextWindow})` : ""}, not what was billed. There is no cache or output split to show.`
+        : `${turn.harness.name} did not report the context size for this call.`));
+  } else if (t) {
     out.push(h("div", { class: "subhead" }, "Where the tokens went"),
       h("div", { class: "tokbar" }, parts.filter((p) => p[1] > 0).map(([k, v, c]) => h("i", { style: { background: c, flexGrow: String(v / sum) }, title: `${k}: ${fmt.n(v)}` }, v / sum > 0.08 ? `${k} ${fmt.k(v)}` : ""))),
       h("div", { class: "legend" }, parts.map(([k, v, c]) => h("span", null, h("i", { class: "dot", style: { "--c": c } }), `${k}: ${fmt.n(v)}`))),
@@ -387,6 +393,11 @@ const PARAM_NOTES = {
   include: "Extra fields to return. reasoning.encrypted_content brings the model's reasoning back as ciphertext, so it can be replayed next request.",
   prompt_cache_key: "Groups requests for the prompt cache. Codex uses the session id, so every lap of a session hits the same cache.",
   client_metadata: "Identifiers the client attaches: session, thread, turn.",
+  // Cursor: not body fields but facts read out of the run stream.
+  conversationId: "Cursor's id for the conversation. Its server keeps the conversation under this id, which is why the CLI never re-sends it.",
+  runId: "One run per prompt: the agent loop that answers it, on Cursor's servers.",
+  contextWindow: "How full the model's context window was for this call, as Cursor reports it.",
+  rebuiltFrom: "The captured run stream this call was rebuilt from. See Raw JSON.",
 };
 
 const BETA_NOTES = {
@@ -413,7 +424,9 @@ function paramsTab(ctx, r) {
   const headerRows = (hdrs, hl) => Object.entries(hdrs).map(([k, v]) => h("tr", { class: hl(k) ? "hl" : "" }, h("td", { class: "k" }, k), h("td", { class: "v" }, v)));
   return h("div", null,
     h("div", { class: "subhead", style: { marginTop: 0 } }, `Request · ${r.path ?? ""}`),
-    h("table", { class: "t" }, h("tr", null, h("th", null, "Body field"), h("th", null, "Value"), h("th", null, "What it does")), rows,
+    ctx.turn.harness.remoteLoop ? h("p", { class: "muted", style: { fontSize: "13px", marginTop: 0 } },
+      `This model call never left your machine as a request: it ran on ${ctx.turn.harness.remoteLoop}. The fields below were read out of the run stream, and the headers are those of the stream that carried it.`) : null,
+    h("table", { class: "t" }, h("tr", null, h("th", null, ctx.turn.harness.remoteLoop ? "Field" : "Body field"), h("th", null, "Value"), h("th", null, "What it does")), rows,
       h("tr", null, h("td", { class: "k" }, "system / tools / conversation"), h("td", { class: "v" }, `${r.system.length} / ${r.tools.length} / ${r.messages.length}`), h("td", { class: "explain" }, "See the other tabs."))),
     betas.length ? [h("div", { class: "subhead" }, "Beta features switched on (anthropic-beta)"),
       h("div", { class: "betas" }, betas.map((b) => {
@@ -422,7 +435,7 @@ function paramsTab(ctx, r) {
       }))] : null,
     h("div", { class: "subhead" }, "Request headers"),
     h("p", { class: "muted", style: { fontSize: "13px", marginTop: 0 } }, "Credentials were redacted by the proxy before they reached disk."),
-    h("table", { class: "t" }, headerRows(r.headers, (k) => /^(x-claude|anthropic|x-codex|openai|session-id|thread-id|authorization|user-agent)/.test(k))),
+    h("table", { class: "t" }, headerRows(r.headers, (k) => /^(x-claude|anthropic|x-codex|openai|x-cursor|x-ghost|session-id|thread-id|authorization|user-agent)/.test(k))),
     Object.keys(r.responseHeaders).length ? [h("div", { class: "subhead" }, "Response headers"),
       h("p", { class: "muted", style: { fontSize: "13px", marginTop: 0 } }, `The highlighted rows are how ${ctx.turn.harness.name} learns your rate-limit status.`),
       h("table", { class: "t" }, headerRows(r.responseHeaders, (k) => /ratelimit|request-id|x-codex-(primary|secondary|credits)/.test(k)))] : null);
@@ -430,13 +443,17 @@ function paramsTab(ctx, r) {
 
 /* ----------------------------------------------------------------- raw */
 
+/** The turn directory holding a request's files, which is not always this turn. */
+function rawTurnOf(ctx, r) {
+  return r.rawTurn ?? (r.fromBackground ? ctx.backgroundTurnDir : ctx.turn.turn.dir);
+}
+
 function rawTab(ctx, r) {
   const { turn } = ctx;
   const out = h("div");
   const load = async (file) => {
     clear(out).append(h("div", { class: "muted" }, "Loading…"));
-    const bgDir = r.fromBackground ? ctx.backgroundTurnDir : turn.turn.dir;
-    const url = `/api/raw?session=${encodeURIComponent(turn.session.dir)}&turn=${encodeURIComponent(bgDir)}&req=${encodeURIComponent(r.dir)}&file=${file}`;
+    const url = `/api/raw?session=${encodeURIComponent(turn.session.dir)}&turn=${encodeURIComponent(rawTurnOf(ctx, r))}&req=${encodeURIComponent(r.dir)}&file=${file}`;
     try {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -459,6 +476,6 @@ function rawTab(ctx, r) {
   buttons[0].classList.add("on");
   load("request.json");
   return h("div", null,
-    h("div", { class: "toolbar" }, buttons, h("span", { class: "muted mono", style: { fontSize: "12px" } }, `${r.fromBackground ? ctx.backgroundTurnDir : turn.turn.dir}/${r.dir}/`)),
+    h("div", { class: "toolbar" }, buttons, h("span", { class: "muted mono", style: { fontSize: "12px" } }, `${rawTurnOf(ctx, r)}/${r.dir}/`)),
     out);
 }

@@ -9,12 +9,14 @@
  * built to make: the model is stateless, so every request carries everything.
  *
  * Reads only what is on disk. Taking a request apart is provider-specific and
- * lives in an adapter (`claude.ts`, `codex.ts`); everything here is shared.
+ * lives in an adapter (`claude.ts`, `codex.ts`, `cursor.ts`); everything here
+ * is shared.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { claudeViz } from "./claude.ts";
 import { codexViz } from "./codex.ts";
+import { cursorViz } from "./cursor.ts";
 import {
   BlobStore,
   dirsIn,
@@ -32,6 +34,7 @@ export type * from "./model.ts";
 export const ADAPTERS: Record<string, VizAdapter> = {
   claude: claudeViz,
   codex: codexViz,
+  cursor: cursorViz,
 };
 
 function adapterFor(provider: string): VizAdapter | undefined {
@@ -113,13 +116,21 @@ export function digestTurn(logDir: string, sessionName: string, turnName: string
   }
 
   const requests: VizRequest[] = [];
-  for (const name of dirsIn(turnDir, "req-")) {
-    const r = digestRequest(adapter, store, join(turnDir, name), name, false);
-    if (r) requests.push(r);
+  const notes: string[] = [];
+  const bgDir = dirsIn(sessionDir, "turn-000")[0];
+  if (adapter.turn) {
+    const built = adapter.turn({ store, sessionDir, turnDir: turnName });
+    requests.push(...built.requests);
+    notes.push(...built.notes);
+    warnings.push(...built.warnings);
+  } else {
+    for (const name of dirsIn(turnDir, "req-")) {
+      const r = digestRequest(adapter, store, join(turnDir, name), name, false);
+      if (r) requests.push(r);
+    }
   }
 
-  const bgDir = dirsIn(sessionDir, "turn-000")[0];
-  const window = backgroundWindow(sessionDir, turnName);
+  const window = adapter.turn ? undefined : backgroundWindow(sessionDir, turnName);
   if (bgDir && bgDir !== turnName && window) {
     for (const name of dirsIn(join(sessionDir, bgDir), "req-")) {
       const r = digestRequest(adapter, store, join(sessionDir, bgDir, name), name, true);
@@ -179,6 +190,7 @@ export function digestTurn(logDir: string, sessionName: string, turnName: string
     blobs: store.blobs,
     requests,
     warnings,
+    notes,
   };
 }
 
@@ -193,10 +205,26 @@ export function listSessions(logDir: string): SessionListing[] {
     const provider = String(session.provider ?? "claude");
     const adapter = adapterFor(provider);
     const turns: TurnListing[] = [];
+    const counted = adapter?.listTurns?.(dir);
     for (const t of dirsIn(dir, "turn-")) {
       if (t.startsWith("turn-000")) continue;
       const meta = readJson(join(dir, t, "turn.json")) ?? {};
       const reqs: any[] = Array.isArray(meta.requests) ? meta.requests : [];
+      if (counted) {
+        const c = counted.get(t) ?? { requests: 0, durationMs: 0, tokens: 0 };
+        turns.push({
+          dir: t,
+          index: Number(meta.turn ?? 0),
+          label: String(meta.label ?? t),
+          startedAt: meta.startedAt,
+          requests: c.requests,
+          main: c.requests,
+          background: 0,
+          durationMs: c.durationMs,
+          tokens: c.tokens,
+        });
+        continue;
+      }
       turns.push({
         dir: t,
         index: Number(meta.turn ?? 0),

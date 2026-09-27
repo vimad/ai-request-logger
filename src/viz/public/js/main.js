@@ -107,7 +107,7 @@ async function homePage() {
       list.append(h("div", { class: "panel empty" },
         h("h3", null, "No turns captured yet"),
         h("p", null, "Reading ", h("code", null, data.logDir)),
-        h("p", null, "Start the proxy with ", h("code", null, "npm start"), " and run ", h("code", null, "ANTHROPIC_BASE_URL=http://127.0.0.1:8787 claude"), ", or ", h("code", null, "npm run start:codex"), " and run the ", h("code", null, "codex -c …"), " line it prints. Ask it something, and it will appear here on its own.")));
+        h("p", null, "Start the proxy with ", h("code", null, "npm start"), " and run ", h("code", null, "ANTHROPIC_BASE_URL=http://127.0.0.1:8787 claude"), ", or ", h("code", null, "npm run start:codex"), " and run the ", h("code", null, "codex -c …"), " line it prints, or ", h("code", null, "npm run start:cursor"), " and ", h("code", null, "agent --endpoint http://127.0.0.1:8787"), ". Ask it something, and it will appear here on its own.")));
       return;
     }
     for (const sess of data.sessions) {
@@ -139,9 +139,9 @@ async function homePage() {
     h("div", { class: "intro" },
       h("div", null,
         h("h1", null, "What really happens when you ", h("em", null, "press Enter")),
-        h("p", null, "Agent X-Ray replays a real Claude Code or Codex CLI turn from the proxy's logs. It shows the loop, the hidden system prompt, the tools, the context the harness injects, and the background calls you never see. It's built for explaining how a coding agent works."),
+        h("p", null, "Agent X-Ray replays a real Claude Code, Codex CLI or Cursor CLI turn from the proxy's logs. It shows the loop, the hidden system prompt, the tools, the context the harness injects, and the background calls you never see. It's built for explaining how a coding agent works."),
         h("p", { class: "how muted" },
-          "1. ", h("code", null, "npm start"), "  2. ", h("code", null, "ANTHROPIC_BASE_URL=http://127.0.0.1:8787 claude"), "  (or ", h("code", null, "npm run start:codex"), " and the ", h("code", null, "codex -c …"), " line it prints)  3. ask it something, then pick the turn below.")),
+          "1. ", h("code", null, "npm start"), "  2. ", h("code", null, "ANTHROPIC_BASE_URL=http://127.0.0.1:8787 claude"), "  (or ", h("code", null, "npm run start:codex"), " and the ", h("code", null, "codex -c …"), " line it prints, or ", h("code", null, "npm run start:cursor"), " and ", h("code", null, "agent --endpoint http://127.0.0.1:8787"), ")  3. ask it something, then pick the turn below.")),
       introArt()),
     list);
   await load();
@@ -187,7 +187,8 @@ async function turnPage(sessionDir, turnDir) {
   mat.select(insp.key);
 
   clear(app).append(
-    turn.warnings.map((w) => h("div", { class: "warn" }, w)),
+    ...turn.warnings.map((w) => h("div", { class: "warn" }, w)),
+    ...(turn.notes ?? []).map((n) => h("div", { class: "note" }, n)),
     hero(turn),
     th.el,
     mat.el,
@@ -249,15 +250,25 @@ function hero(turn) {
   const bar = (parts) => h("div", { class: "mini" }, parts.map(([v, c]) => h("i", { style: { width: `${(v / Math.max(1, parts.reduce((n, p) => n + p[0], 0))) * 100}%`, background: c } })));
   const stat = (k, v, sub, extra) => h("div", { class: "panel stat" }, h("div", { class: "k" }, k), h("div", { class: "v" }, v), h("div", { class: "s" }, sub), extra);
 
+  // Cursor reports only how full the context window was: no cache, no output.
+  const contextOnly = turn.harness.usage === "context";
+  const remote = turn.harness.remoteLoop;
+
   return h("div", { class: "hero" },
     h("div", { class: "panel prompt-card" },
       h("div", { class: "label" }, `Turn ${turn.turn.index} · you typed`),
       h("blockquote", null, turn.turn.userInput || turn.turn.label),
       amp),
     h("div", { class: "stats" },
-      stat("API requests", reqs.length, `${mains.length} agent-loop lap${mains.length === 1 ? "" : "s"} · ${bgs} background`, bar([[mains.length, "var(--c-prompt)"], [bgs, "var(--c-bg)"]])),
-      stat("Tokens read", fmt.k(tin), `${tin ? Math.round((cacheRead / tin) * 100) : 0}% served from the prompt cache`, bar([[cacheRead, "var(--c-cache)"], [tin - cacheRead, "var(--c-system)"]])),
-      stat("Tokens written", fmt.n(tout), think ? `incl. ${fmt.n(think)} thinking` : "by the model, across every request", bar([[tout - think, "var(--c-assistant)"], [think, "var(--c-thinking)"]])),
+      remote
+        ? stat("Model calls", reqs.length, `${mains.length} agent-loop lap${mains.length === 1 ? "" : "s"}, made on ${remote} and rebuilt from the run stream`, bar([[mains.length, "var(--c-prompt)"], [bgs, "var(--c-bg)"]]))
+        : stat("API requests", reqs.length, `${mains.length} agent-loop lap${mains.length === 1 ? "" : "s"} · ${bgs} background`, bar([[mains.length, "var(--c-prompt)"], [bgs, "var(--c-bg)"]])),
+      contextOnly
+        ? stat("Tokens read", fmt.k(tin), "the context size each lap, summed; no cache split is reported", bar([[tin, "var(--c-system)"]]))
+        : stat("Tokens read", fmt.k(tin), `${tin ? Math.round((cacheRead / tin) * 100) : 0}% served from the prompt cache`, bar([[cacheRead, "var(--c-cache)"], [tin - cacheRead, "var(--c-system)"]])),
+      contextOnly
+        ? stat("Tokens written", "-", `${turn.harness.name} does not report output tokens`)
+        : stat("Tokens written", fmt.n(tout), think ? `incl. ${fmt.n(think)} thinking` : "by the model, across every request", bar([[tout - think, "var(--c-assistant)"], [think, "var(--c-thinking)"]])),
       stat("Wall time", fmt.ms(wallEnd - wallStart), `model ${fmt.ms(modelMs)} · your machine ${fmt.ms(localMs)}`, bar([[modelMs, "var(--c-system)"], [localMs, "var(--c-tool_result)"]]))));
 }
 
