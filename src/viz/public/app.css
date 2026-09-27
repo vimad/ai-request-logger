@@ -30,6 +30,9 @@
   --c-agent: #c084fc;
   --c-cache: #64748b;
   --c-error: #f87171;
+  --h-claude: #e8916b;
+  --h-codex: #60a5fa;
+  --h-cursor: #c4b5fd;
 
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   --sans: ui-sans-serif, -apple-system, "Segoe UI", Inter, Roboto, "Helvetica Neue", sans-serif;
@@ -66,6 +69,9 @@
   --c-agent: #9333ea;
   --c-cache: #94a3b8;
   --c-error: #dc2626;
+  --h-claude: #c2410c;
+  --h-codex: #1d4ed8;
+  --h-cursor: #6d28d9;
   color-scheme: light;
 }
 
@@ -153,6 +159,10 @@ main { max-width: 1480px; margin: 0 auto; padding: 22px 22px 120px; }
 .chip.solid { background: var(--c); color: #0b1020; border-color: transparent; }
 .dot { width: 10px; height: 10px; border-radius: 3px; background: var(--c); display: inline-block; flex: none; }
 .badge-new { --c: var(--accent); }
+.harness-claude { --c: var(--h-claude); }
+.harness-codex { --c: var(--h-codex); }
+.harness-cursor { --c: var(--h-cursor); }
+.harness-unknown { --c: var(--c-other); }
 .badge-echo { --c: var(--c-assistant); }
 .badge-carried { --c: var(--faint); }
 

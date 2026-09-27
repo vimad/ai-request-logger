@@ -116,7 +116,7 @@ async function homePage() {
         h("div", { class: "session-head" },
           h("h3", null, `session ${sess.id.slice(0, 8)}`),
           h("span", { class: "muted", style: { fontSize: "13px" } }, when),
-          h("span", { class: "chip", style: { "--c": sess.supported ? "var(--c-assistant)" : "var(--c-other)" } }, sess.harness ?? sess.provider),
+          h("span", { class: `chip harness-${sess.supported ? sess.provider : "unknown"}` }, sess.harness ?? sess.provider),
           sess.supported ? null : h("span", { class: "muted", style: { fontSize: "12px" } }, "the visualizer does not understand this provider yet")),
         h("div", { class: "turns" }, sess.turns.map((t) => h("a", {
           class: "turn-card" + (sess.supported ? "" : " disabled"),
