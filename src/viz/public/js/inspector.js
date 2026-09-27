@@ -9,6 +9,7 @@ const TABS = [
   ["conversation", "Conversation"],
   ["system", "System prompt"],
   ["tools", "Tools"],
+  ["skills", "Skills"],
   ["response", "Response"],
   ["params", "Params & headers"],
   ["raw", "Raw JSON"],
@@ -44,6 +45,7 @@ export function inspector(ctx) {
       conversation: r?.messages.length,
       system: r?.system.length,
       tools: r?.tools.length,
+      skills: r ? skillsIn(turn, r).length : undefined,
       response: r?.response.length,
     };
     for (const [id, label] of TABS) {
@@ -56,7 +58,7 @@ export function inspector(ctx) {
     clear(body);
     const r = turn.byKey.get(key);
     if (!r) return body.append(h("div", { class: "empty" }, "No request selected."));
-    const view = { conversation, system: systemTab, tools: toolsTab, response: responseTab, params: paramsTab, raw: rawTab }[tab] ?? conversation;
+    const view = { conversation, system: systemTab, tools: toolsTab, skills: skillsTab, response: responseTab, params: paramsTab, raw: rawTab }[tab] ?? conversation;
     body.append(view(ctx, r));
   }
 
@@ -301,6 +303,83 @@ function toolsTab(ctx, r) {
     h("div", { class: "callout", style: { "--c": "var(--c-tools)" } },
       h("b", null, `${tools.length} tools, ${fmt.chars(total)} (≈${fmt.k(total * turn.tokPerChar)} tokens)`),
       " describe everything the model is allowed to ask for. They ride along on every request. This turn actually used ",
+      h("b", null, used.length ? used.map(([n, c]) => `${n}${c > 1 ? ` ×${c}` : ""}`).join(", ") : "none of them"), "."),
+    h("div", { class: "toolbar" }, search, h("span", { class: "spacer" }),
+      h("label", { class: "toggle" }, h("input", { type: "checkbox", onchange: (e) => { bySize = e.target.checked; draw(); } }), "Sort by size")),
+    groupsEl);
+}
+
+/* --------------------------------------------------------------- skills */
+
+/** Every skill a request advertises, with the block that carries it. */
+function skillsIn(turn, r) {
+  const out = [];
+  const seen = new Set();
+  for (const ref of allRefs(r)) {
+    const b = turn.blobs[ref.b];
+    for (const sk of b?.skills ?? []) {
+      if (seen.has(sk.name)) continue;
+      seen.add(sk.name);
+      out.push({ ...sk, from: b });
+    }
+  }
+  return out;
+}
+
+function skillsTab(ctx, r) {
+  const { turn } = ctx;
+  const skills = skillsIn(turn, r);
+  if (!skills.length) {
+    return h("div", { class: "empty" }, `This request carries no skills list. ${turn.harness.name} sends it with the main agent loop; background calls usually go without.`);
+  }
+  const sources = [...new Set(skills.map((sk) => sk.from))];
+  const listChars = sources.reduce((n, b) => n + b.chars, 0);
+  const max = Math.max(...skills.map((sk) => sk.chars));
+  const search = h("input", { type: "search", placeholder: "Filter skills…" });
+  let bySize = false;
+  const groupsEl = h("div", { class: "tool-groups" });
+
+  const draw = () => {
+    clear(groupsEl);
+    const q = search.value.trim().toLowerCase();
+    const groups = new Map();
+    for (const sk of skills) {
+      if (q && !sk.name.toLowerCase().includes(q) && !sk.description.toLowerCase().includes(q)) continue;
+      const plugin = /^(.+?):/.exec(sk.name)?.[1];
+      const g = plugin ? `Plugin · ${plugin}` : "Skills";
+      if (!groups.has(g)) groups.set(g, []);
+      groups.get(g).push(sk);
+    }
+    for (const [g, list] of groups) {
+      if (bySize) list.sort((a, b) => b.chars - a.chars);
+      const chars = list.reduce((n, sk) => n + sk.chars, 0);
+      groupsEl.append(h("div", { class: "tool-group" },
+        groups.size > 1 ? h("h4", null, `${g} · ${list.length} · ${fmt.chars(chars)}`) : null,
+        h("div", { class: "skill-list" }, list.map((sk) => {
+          const used = turn.usedSkills.get(sk.name);
+          const el = h("div", { class: "skill" + (used ? " used" : ""), title: used ? `Used ${used}× in this turn` : "Not used in this turn" },
+            h("div", { class: "skill-head", onclick: () => el.classList.toggle("open") },
+              h("span", { class: "nm" }, sk.name),
+              h("span", { class: "meter" }, h("i", { style: { width: `${(sk.chars / max) * 100}%` } })),
+              h("span", { class: "sz" }, `${fmt.n(sk.chars)} chars${used ? ` · used ×${used}` : ""}`)),
+            h("div", { class: "desc" }, sk.description || h("span", { class: "faint" }, "(sent with no description, just the name)")),
+            sk.path ? h("div", { class: "path mono faint" }, sk.path) : null);
+          return el;
+        }))));
+    }
+  };
+  search.addEventListener("input", draw);
+  draw();
+  const used = [...turn.usedSkills.entries()];
+  return h("div", null,
+    h("div", { class: "callout", style: { "--c": "var(--c-reminder)" } },
+      h("b", null, `${skills.length} skills, ${fmt.chars(listChars)} (≈${fmt.k(listChars * turn.tokPerChar)} tokens)`),
+      ` ride along on every request, in `,
+      sources.map((b, i) => [i ? ", " : "", h("a", { href: "#", title: b.label, onclick: (e) => { e.preventDefault(); openBlob(ctx, b.id, r.key); } }, sources.length > 1 ? `block ${i + 1}` : "one block")]),
+      ` that ${turn.harness.name} injects`,
+      ". Only each skill's name and one-line description are sent, never the SKILL.md itself. ",
+      turn.harness.skills ?? "When the model decides a skill fits, it fetches the full SKILL.md.",
+      " This turn used ",
       h("b", null, used.length ? used.map(([n, c]) => `${n}${c > 1 ? ` ×${c}` : ""}`).join(", ") : "none of them"), "."),
     h("div", { class: "toolbar" }, search, h("span", { class: "spacer" }),
       h("label", { class: "toggle" }, h("input", { type: "checkbox", onchange: (e) => { bySize = e.target.checked; draw(); } }), "Sort by size")),

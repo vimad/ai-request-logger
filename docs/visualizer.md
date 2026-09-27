@@ -45,11 +45,13 @@ read off the wire (see [Cursor](#cursor) below).
    Bands join blocks that are byte-identical to the previous request on the
    same thread. The model's reply hangs under its tower and flows into the
    next one. The headline gives the share of bytes that were pure re-sending.
-4. **The request inspector.** A filmstrip of requests and six tabs:
+4. **The request inspector.** A filmstrip of requests and seven tabs:
    *Conversation* (role-coloured, with injected context collapsed and flagged
    as such), *System prompt* (outline and search), *Tools* (grouped by
    built-in or MCP server, sized, with the ones used this turn highlighted),
-   *Response* (token split and stream timeline), *Params & headers* (beta
+   *Skills* (the skills list the harness injects: each skill's name,
+   description and SKILL.md path, sized, with the ones used this turn
+   highlighted), *Response* (token split and stream timeline), *Params & headers* (beta
    flags explained, rate-limit headers highlighted) and *Raw JSON*.
 
 Clicking any block, anywhere, opens a drawer with its full text, who wrote it,
@@ -102,6 +104,20 @@ Every block gets a **category** for who wrote it: `system`, `tools`, `prompt`
 role-`system` messages), `synthetic` (a whole prompt the harness wrote to the
 model, like the title call or suggestion mode), `assistant`, `thinking`,
 `tool_use`, `tool_result`.
+
+Claude Code packs several `<system-reminder>`s into one text block (the
+role-`system` message carries the environment, agent types, MCP server
+instructions, the skills list and more). `reminderChunks()` in `claude.ts`
+cuts such a block at each reminder, so every piece gets its own name and its
+own diff state. The pieces join back to the wire text exactly; *Raw JSON*
+still shows the block as sent.
+
+A block that is a skills list carries `skills` on its blob: name,
+description, and the SKILL.md path when the harness gives one. Each adapter
+parses its own format (Claude Code's `- name: description` reminder, Codex's
+`<skills_instructions>`, Cursor's `<agent_skill fullPath>` tags). A skill
+counts as used this turn when a tool call names it in the `Skill` tool
+(Claude Code) or mentions its SKILL.md path (Codex and Cursor read the file).
 
 Every request gets a **purpose**: agent loop, subagent, quota check, session
 title, next-prompt suggestion, topic detection, compaction. Each comes with a

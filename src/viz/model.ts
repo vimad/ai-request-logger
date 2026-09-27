@@ -48,6 +48,21 @@ export interface Blob {
   json?: unknown;
   /** For a tool definition: the namespace it was declared in, if any. */
   group?: string;
+  /** The skills this block advertises to the model, when it is a skills list. */
+  skills?: Skill[];
+}
+
+/**
+ * One entry in the skills list a harness injects. Only this much rides along
+ * on every request; the SKILL.md body is fetched when the model asks for it.
+ */
+export interface Skill {
+  name: string;
+  description: string;
+  /** Where the SKILL.md lives, when the harness says (Codex, Cursor). */
+  path?: string;
+  /** Characters this entry takes up in the list. */
+  chars: number;
 }
 
 export interface Ref {
@@ -162,6 +177,8 @@ export interface HarnessInfo {
    * with no output or cache split, so the page does not print zeros for them.
    */
   usage?: "billing" | "context";
+  /** How the model gets a skill's full SKILL.md, for the Skills tab. */
+  skills?: string;
 }
 
 export interface VizTurn {
@@ -279,6 +296,32 @@ export function readStream(path: string): Array<{ at: number; event?: string; da
       const ev = JSON.parse(line);
       out.push({ at: typeof ev.at === "number" ? ev.at : 0, event: ev.event, data: ev.data ?? {} });
     } catch {}
+  }
+  return out;
+}
+
+/**
+ * A markdown bullet list of skills, one `- name: description` per entry.
+ * An entry runs to the next top-level bullet, so a description may wrap.
+ * Names can hold a colon (`plugin:skill`), so the name ends at the first
+ * colon followed by whitespace. A trailing `(file: /path)` is the location.
+ */
+export function bulletSkills(list: string): Skill[] {
+  const out: Skill[] = [];
+  for (const entry of list.split(/\n(?=- )/)) {
+    const m = /^- ([\s\S]+)$/.exec(entry.trim());
+    if (!m) continue;
+    const body = m[1]!.trim();
+    const cut = /:\s/.exec(body);
+    const name = (cut ? body.slice(0, cut.index) : body).trim();
+    let description = cut ? body.slice(cut.index + 1).trim() : "";
+    let path: string | undefined;
+    const loc = /\s*\((?:file|[\w ]+resource):\s*([^()]+)\)\s*$/.exec(description);
+    if (loc) {
+      path = loc[1]!.trim();
+      description = description.slice(0, loc.index).trim();
+    }
+    if (name && !/\s/.test(name)) out.push({ name, description, ...(path ? { path } : {}), chars: entry.trim().length });
   }
   return out;
 }

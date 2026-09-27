@@ -10,6 +10,7 @@ import { tokens } from "../claude/render.ts";
 import { blocksOf, type ContentBlock } from "../claude/turns.ts";
 import { join } from "node:path";
 import {
+  bulletSkills,
   oneLine,
   readStream,
   type BlobStore,
@@ -17,6 +18,7 @@ import {
   type Purpose,
   type Ref,
   type RequestParts,
+  type Skill,
   type StreamBlock,
   type StreamSummary,
   type VizAdapter,
@@ -25,6 +27,49 @@ import {
 
 const SYSTEM_REMINDER = /<system-reminder>[\s\S]*?<\/system-reminder>/g;
 const SYNTHETIC = /^\s*\[(SUGGESTION MODE|No response requested)/i;
+
+const SKILLS_HEAD = /^The following skills are available for use with the Skill tool:\s*$/m;
+
+/** The skills list Claude Code injects: `- name: description`, one per skill. */
+function claudeSkills(text: string): Skill[] | undefined {
+  const head = SKILLS_HEAD.exec(text);
+  if (!head) return undefined;
+  const list = text.slice(head.index + head[0].length).replace(/<\/system-reminder>[\s\S]*$/, "");
+  const skills = bulletSkills(list);
+  return skills.length ? skills : undefined;
+}
+
+/**
+ * Claude Code packs several `<system-reminder>`s into one text block - the
+ * role-system message carries the environment, agent types, MCP server
+ * instructions, the skills list and more, all in one. Cut it at each
+ * reminder, and at the end of a reminder that has your words after it, so
+ * each piece gets its own name. Every chunk runs to the start of the next,
+ * so the pieces join back to the original exactly.
+ */
+export function reminderChunks(text: string): string[] {
+  const matches = [...text.matchAll(SYSTEM_REMINDER)];
+  if (!matches.length) return [text];
+  const cuts = new Set<number>([0]);
+  matches.forEach((m, i) => {
+    cuts.add(m.index!);
+    const end = m.index! + m[0].length;
+    if (text.slice(end, matches[i + 1]?.index ?? text.length).trim()) cuts.add(end);
+  });
+  const at = [...cuts].sort((a, b) => a - b);
+  const chunks: string[] = [];
+  let carry = "";
+  at.forEach((c, i) => {
+    const piece = carry + text.slice(c, at[i + 1] ?? text.length);
+    // Whitespace on its own is not a block; it rides with what follows.
+    if (!piece.trim() && i < at.length - 1) carry = piece;
+    else {
+      chunks.push(piece);
+      carry = "";
+    }
+  });
+  return chunks.filter((c) => c.length > 0);
+}
 
 /** The first line of a reminder that says what it is about. */
 function reminderLabel(text: string): string {
@@ -102,7 +147,11 @@ function blockBlob(store: BlobStore, role: string, b: ContentBlock): Ref {
     switch (b.type) {
       case "text": {
         const text = String(b.text ?? "");
-        return { label: cat === "reminder" ? reminderLabel(text) : oneLine(text), text };
+        if (cat !== "reminder") return { label: oneLine(text), text };
+        const skills = claudeSkills(text);
+        return skills
+          ? { label: `Skills · ${skills.length} available to the Skill tool`, text, skills }
+          : { label: reminderLabel(text), text };
       }
       case "thinking": {
         const text = String(b.thinking ?? "");
@@ -151,6 +200,15 @@ function blockBlob(store: BlobStore, role: string, b: ContentBlock): Ref {
     }
   });
   return b.cache_control ? { b: id, cache: true } : { b: id };
+}
+
+/** A request's message block, cut into one ref per reminder it packs. */
+function messageRefs(store: BlobStore, role: string, b: ContentBlock): Ref[] {
+  const chunks = b.type === "text" && role !== "assistant" ? reminderChunks(String(b.text ?? "")) : [];
+  if (chunks.length < 2) return [blockBlob(store, role, b)];
+  const { cache_control, ...rest } = b;
+  return chunks.map((text, i) =>
+    blockBlob(store, role, i === chunks.length - 1 && cache_control ? { ...rest, text, cache_control } : { ...rest, text }));
 }
 
 /** Why Claude Code made this call. The teaching value is in the `explain`. */
@@ -295,7 +353,7 @@ function request(store: BlobStore, req: any, res: any, reqDir: string): RequestP
   const messages: VizMessage[] = [];
   for (const m of Array.isArray(body.messages) ? body.messages : []) {
     const role = String(m?.role ?? "?");
-    messages.push({ role, refs: blocksOf(m?.content).map((b) => blockBlob(store, role, b)) });
+    messages.push({ role, refs: blocksOf(m?.content).flatMap((b) => messageRefs(store, role, b)) });
   }
 
   const resBody = res.body;
@@ -329,6 +387,7 @@ export const claudeViz: VizAdapter = {
     api: "Claude API",
     stopField: "stop_reason",
     about: {},
+    skills: "When the model decides a skill fits, it calls the Skill tool with the skill's name, and Claude Code answers with the full SKILL.md.",
   },
   tokens,
   request,

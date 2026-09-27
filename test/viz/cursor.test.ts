@@ -26,7 +26,7 @@ const Q2 = "now add subtract()";
 const SYSTEM = { role: "system", content: "You are an AI coding assistant, powered by Cursor." };
 const USER_INFO = {
   role: "user",
-  content: "<user_info>\nOS Version: test\n</user_info>\n\n<rules>\nAlways be brief.\n</rules>\n\n<agent_skills>\nNo skills.\n</agent_skills>",
+  content: "<user_info>\nOS Version: test\n</user_info>\n\n<rules>\nAlways be brief.\n</rules>\n\n<agent_skills>\nUse a skill by reading it.\n<available_skills>\n<agent_skill fullPath=\"/home/u/.cursor/skills/create-rule/SKILL.md\">Create Cursor rules.</agent_skill>\n</available_skills>\n</agent_skills>",
 };
 const query = (q: string) => ({ role: "user", content: [{ type: "text", text: `<timestamp>Thursday</timestamp>\n<user_query>\n${q}\n</user_query>` }] });
 const call = (id: string, toolName: string, args: unknown) => ({ type: "tool-call", toolCallId: id, toolName, args });
@@ -182,6 +182,9 @@ describe("viz digest: a Cursor session is rebuilt into model calls", () => {
     assert.ok(injected.every((b) => b.cat === "reminder"));
     assert.deepEqual(injected.map((b) => b.label.split(" · ")[0]), ["Your environment <user_info>", "Rules <rules>", "Skills <agent_skills>"]);
     assert.equal(injected.map((b) => b.text).join(""), USER_INFO.content, "nothing lost in the split");
+    assert.deepEqual(injected[2]!.skills, [
+      { name: "create-rule", description: "Create Cursor rules.", path: "/home/u/.cursor/skills/create-rule/SKILL.md", chars: 102 },
+    ]);
     const [thinking] = blobsOf(t1, r.response);
     assert.equal(thinking!.cat, "thinking");
     assert.match(thinking!.text, /Reading calc\.py first\./);

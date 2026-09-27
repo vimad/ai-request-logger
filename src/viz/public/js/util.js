@@ -170,9 +170,27 @@ export function enrich(turn) {
     }
   }
 
+  // Which listed skills the model reached for: a Skill tool call naming one
+  // (Claude Code), or any tool call that mentions its SKILL.md (Codex and
+  // Cursor read the file with an ordinary tool).
+  const skills = Object.values(blobs).flatMap((b) => b.skills ?? []);
+  const usedSkills = new Map();
+  if (skills.length) {
+    for (const r of turn.requests) {
+      if (isBackground(r) && !r.agentId) continue;
+      for (const ref of r.response) {
+        const b = blobs[ref.b];
+        if (b?.cat !== "tool_use") continue;
+        const asked = b.name === "Skill" && typeof b.json?.skill === "string" ? b.json.skill.replace(/^\//, "") : undefined;
+        const hit = new Set(skills.filter((sk) => sk.name === asked || (sk.path && b.text.includes(sk.path))).map((sk) => sk.name));
+        for (const name of hit) usedSkills.set(name, (usedSkills.get(name) ?? 0) + 1);
+      }
+    }
+  }
+
   for (const r of turn.requests) r.diff = diffOf(r, byKey.get(r.prevKey), blobs);
 
-  return { ...turn, byKey, tokPerChar, appears, toolNameById, usedTools };
+  return { ...turn, byKey, tokPerChar, appears, toolNameById, usedTools, usedSkills };
 }
 
 export function allRefs(r) {

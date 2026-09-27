@@ -35,7 +35,7 @@
  *   dropped, so a replay counts once.
  */
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import type { CursorUsage } from "../cursor/messages.ts";
 import { tokens } from "../cursor/render.ts";
 import { RUN_PATH } from "../cursor/turns.ts";
@@ -50,6 +50,7 @@ import {
   type Purpose,
   type Ref,
   type RequestParts,
+  type Skill,
   type StreamBlock,
   type TurnInput,
   type VizAdapter,
@@ -396,6 +397,22 @@ function sections(text: string): Array<{ tag?: string; text: string }> {
     .filter((x) => x.text.length > 0);
 }
 
+/**
+ * The skills list in `<agent_skills>`: one
+ * `<agent_skill fullPath="/…/name/SKILL.md">description</agent_skill>` each.
+ * Cursor gives no name, so the skill is named after its directory.
+ */
+function cursorSkills(text: string): Skill[] | undefined {
+  const skills: Skill[] = [];
+  for (const m of text.matchAll(/<agent_skill\b([^>]*)>([\s\S]*?)<\/agent_skill>/g)) {
+    const attrs = Object.fromEntries([...m[1]!.matchAll(/([\w-]+)="([^"]*)"/g)].map((a) => [a[1]!, a[2]!]));
+    const path = attrs.fullPath ?? attrs.path;
+    const name = attrs.name ?? (path ? basename(dirname(path)) : undefined);
+    if (name) skills.push({ name, description: m[2]!.trim(), ...(path ? { path } : {}), chars: m[0].length });
+  }
+  return skills.length ? skills : undefined;
+}
+
 function sectionLabel(tag: string | undefined, text: string): string {
   const inner = text.replace(/<\/?[\w-]+[^>]*>/g, " ");
   if (!tag) return oneLine(inner, 80);
@@ -418,10 +435,14 @@ function userRefs(store: BlobStore, m: Json): Ref[] {
       const cat: Category = c.tag === "user_query" || !tagged ? "prompt" : "reminder";
       const shown = c.tag === "user_query" ? /<user_query>\s*([\s\S]*?)\s*<\/user_query>/.exec(c.text)?.[1] ?? c.text : c.text;
       refs.push({
-        b: store.put(cat, { type: "text", text: c.text }, () => ({
-          label: cat === "prompt" ? oneLine(shown) : sectionLabel(c.tag, c.text),
-          text: c.text,
-        })),
+        b: store.put(cat, { type: "text", text: c.text }, () => {
+          const skills = c.tag === "agent_skills" ? cursorSkills(c.text) : undefined;
+          return {
+            label: skills ? `Skills <agent_skills> · ${skills.length} available` : cat === "prompt" ? oneLine(shown) : sectionLabel(c.tag, c.text),
+            text: c.text,
+            ...(skills ? { skills } : {}),
+          };
+        }),
       });
     }
   }
@@ -719,6 +740,7 @@ export const cursorViz: VizAdapter = {
     stopField: "inferred stop",
     remoteLoop: "Cursor's servers",
     usage: "context",
+    skills: "Cursor sends no skill tool. When the model decides a skill fits, it reads the skill's SKILL.md from the path in the list with its Read tool.",
     about: {
       system: "Instructions Cursor writes for the model: who it is, how to talk, how to use its tools. You never see them. Cursor's server keeps them and sends them to the model on every call.",
       tools: "What the model may ask for. Cursor's server adds the full definitions itself, so only the tool names reach your machine; one extra block stands for the size Cursor reports for them.",

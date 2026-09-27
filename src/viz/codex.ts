@@ -21,6 +21,7 @@
 import { join } from "node:path";
 import { tokens } from "../codex/render.ts";
 import {
+  bulletSkills,
   oneLine,
   PLUMBING,
   readStream,
@@ -29,6 +30,7 @@ import {
   type Purpose,
   type Ref,
   type RequestParts,
+  type Skill,
   type Stop,
   type StreamBlock,
   type StreamSummary,
@@ -133,6 +135,19 @@ function normalise(item: Item): Record<string, unknown> {
   }
 }
 
+/**
+ * The skills list Codex injects in `<skills_instructions>`, under
+ * `### Available skills`: `- name: description (file: /path/SKILL.md)`.
+ */
+function codexSkills(text: string): Skill[] | undefined {
+  if (!/^\s*<skills_instructions>/.test(text)) return undefined;
+  const head = /^### Available skills\s*$/m.exec(text);
+  if (!head) return undefined;
+  const list = text.slice(head.index + head[0].length).split(/^#{1,3} |<\/skills_instructions>/m)[0]!;
+  const skills = bulletSkills(list);
+  return skills.length ? skills : undefined;
+}
+
 /** One content part of a `message` item. */
 function partBlob(store: BlobStore, role: string, part: Item): Ref {
   const isText = typeof part.text === "string";
@@ -147,7 +162,9 @@ function partBlob(store: BlobStore, role: string, part: Item): Ref {
   return {
     b: store.put(cat, norm, () =>
       isText
-        ? { label: cat === "reminder" ? injectedLabel(text) : oneLine(text), text }
+        ? cat === "reminder"
+          ? { label: injectedLabel(text), text, ...(codexSkills(text) ? { skills: codexSkills(text) } : {}) }
+          : { label: oneLine(text), text }
         : { label: String(part.type ?? "part"), text: JSON.stringify(part, null, 2) },
     ),
   };
@@ -330,10 +347,14 @@ function request(store: BlobStore, req: any, res: any, reqDir: string): RequestP
       for (const part of partsOf(item.content)) {
         const text = typeof part.text === "string" ? part.text : JSON.stringify(part);
         system.push({
-          b: store.put("system", { type: "text", text }, () => ({
-            label: `input[${i}] developer · ${oneLine(text, 60)}`,
-            text,
-          })),
+          b: store.put("system", { type: "text", text }, () => {
+            const skills = codexSkills(text);
+            return {
+              label: skills ? `input[${i}] developer · Skills · ${skills.length} available` : `input[${i}] developer · ${oneLine(text, 60)}`,
+              text,
+              ...(skills ? { skills } : {}),
+            };
+          }),
         });
       }
       return;
@@ -375,6 +396,7 @@ export const codexViz: VizAdapter = {
     name: "Codex CLI",
     api: "OpenAI API",
     stopField: "status",
+    skills: "Codex sends no skill tool. When the model decides a skill fits, it reads the skill's SKILL.md from the path in the list with an ordinary shell command.",
     about: {
       system: "Instructions Codex writes for the model: the `instructions` field and the developer messages at the head of the input. Who it is, the sandbox and approval rules, how to use its tools. You never see them, and they are sent in full with every request.",
       reminder: "Text Codex adds to the conversation for you: <environment_context> (working directory, shell, sandbox), AGENTS.md instructions, and developer messages part-way through. Each is its own input item, sent as \"user\" or \"developer\", but you never typed it.",

@@ -448,6 +448,20 @@ mark.cur { background: var(--c-reminder); color: #0b1020; }
 .tool .meter i { display: block; height: 100%; background: var(--c-tools); }
 .tool.used { border-color: var(--c-tool_use); box-shadow: 0 0 0 1px var(--c-tool_use), 0 0 18px color-mix(in srgb, var(--c-tool_use) 35%, transparent); }
 .tool.used .nm::after { content: " ●"; color: var(--c-tool_use); }
+.skill-list { display: flex; flex-direction: column; gap: 6px; }
+.skill { border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; background: var(--panel-2); }
+.skill:hover { border-color: var(--c-reminder); }
+.skill-head { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; gap: 12px; align-items: center; cursor: pointer; }
+.skill .nm { font: 600 12.5px var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skill .sz { font: 10.5px var(--mono); color: var(--faint); white-space: nowrap; }
+.skill .meter { height: 4px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.skill .meter i { display: block; height: 100%; background: var(--c-reminder); }
+.skill .desc { margin-top: 4px; font-size: 13px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; }
+.skill.open .desc { display: block; }
+.skill .path { margin-top: 4px; font-size: 11px; overflow-wrap: anywhere; }
+.skill.used { border-color: var(--c-tool_use); box-shadow: 0 0 0 1px var(--c-tool_use); }
+.skill.used .nm::after { content: " ●"; color: var(--c-tool_use); }
+@media (max-width: 600px) { .skill-head { grid-template-columns: minmax(0, 1fr) auto; } .skill .meter { display: none; } }
 
 /* response tab */
 .kv { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-bottom: 16px; }
