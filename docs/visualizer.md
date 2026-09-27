@@ -20,7 +20,9 @@ The home page polls the log directory, so turns show up as you capture them.
 A turn page that is still growing offers a reload instead of rebuilding under
 you mid-explanation.
 
-**Claude Code only, for now.** Sessions from other providers are listed but
+**Claude Code and the Codex CLI.** Capture Codex traffic with
+`npm run start:codex` and the `codex -c …` line it prints; the page is the
+same, worded for Codex. Sessions from other providers (Cursor) are listed but
 cannot be opened.
 
 ## What the page shows
@@ -68,7 +70,10 @@ and every request that carried it.
 ```
 src/viz/
   server.ts      static files + /api/sessions, /api/turn, /api/raw
-  digest.ts      one turn directory → the model the page draws
+  model.ts       the VizTurn shape, the blob store, the VizAdapter interface
+  digest.ts      one turn directory → the model the page draws (shared)
+  claude.ts      Claude Code adapter: Messages API requests → blobs
+  codex.ts       Codex CLI adapter: Responses API requests → blobs
   public/        vanilla ES modules, no build
     js/main.js       routing, home page, hero
     js/theater.js    the animated loop, the suitcase, the Gantt
@@ -115,12 +120,36 @@ because that is where they belong in the story.
   Markdown renderer touches it.
 - **No truncation of the record.** The UI clips long blocks for layout but
   always offers the full text, and *Raw JSON* is the file itself.
-- **`src/core/` is untouched.** The visualizer depends on core and on
-  `src/claude/`, never the other way round.
+- **`src/core/` is untouched.** The visualizer depends on core and on the
+  provider directories, never the other way round.
+
+### Codex
+
+The Responses API has no `system` / `tools` / `messages` split, just one flat
+`input` array of typed items. `codex.ts` maps it back:
+
+- `instructions`, and the `developer` messages at the head of `input`, are the
+  system prompt. A developer message further down stays in the conversation
+  as injected context.
+- The `additional_tools` item is the tool list, walked through `namespace`
+  nesting; a namespaced tool is grouped under its namespace in *Tools*.
+- Every other item is one conversation entry, labelled `input[i]` so the page
+  points at the real position in the body. Tool outputs get the role `tool`.
+- User-role text that is nothing but tagged blocks (`<environment_context>`)
+  or the AGENTS.md preamble is injected context, not your prompt.
+- Normalising drops `id` and `status`, which the stream attaches to an output
+  item and Codex leaves off when it replays that item. That is what makes the
+  echo of a tool call or reply line up with the original.
+- Codex's wire value for how a reply ended is `status: completed` either way.
+  Each request also carries `stop`, the loop's own reading: `tool_use` when the
+  output holds a tool call, `end_turn` when it does not. The page decides with
+  `stop`, and shows `stopReason` as the wire spelled it.
 
 ## Adding another provider
 
-Write a digest that produces the same `VizTurn` shape (categories and purposes
-are the vocabulary the front end speaks), dispatch on `session.json.provider`
-in `server.ts`, and flip `supported` in `listSessions()`. The front end should
-not need to change.
+Write a `VizAdapter` (see `model.ts`) that takes one request apart into the
+same blobs (categories and purposes are the vocabulary the front end speaks),
+give it a `HarnessInfo` (display name, API name, stop field, and any category
+explanations that differ), and register it in `ADAPTERS` in `digest.ts`. That
+also flips `supported` in `listSessions()`. The front end should not need to
+change: every harness-specific word on the page comes from `turn.harness`.

@@ -107,7 +107,7 @@ async function homePage() {
       list.append(h("div", { class: "panel empty" },
         h("h3", null, "No turns captured yet"),
         h("p", null, "Reading ", h("code", null, data.logDir)),
-        h("p", null, "Start the proxy with ", h("code", null, "npm start"), ", run ", h("code", null, "ANTHROPIC_BASE_URL=http://127.0.0.1:8787 claude"), ", ask it something, and it will appear here on its own.")));
+        h("p", null, "Start the proxy with ", h("code", null, "npm start"), " and run ", h("code", null, "ANTHROPIC_BASE_URL=http://127.0.0.1:8787 claude"), ", or ", h("code", null, "npm run start:codex"), " and run the ", h("code", null, "codex -c …"), " line it prints. Ask it something, and it will appear here on its own.")));
       return;
     }
     for (const sess of data.sessions) {
@@ -116,8 +116,8 @@ async function homePage() {
         h("div", { class: "session-head" },
           h("h3", null, `session ${sess.id.slice(0, 8)}`),
           h("span", { class: "muted", style: { fontSize: "13px" } }, when),
-          h("span", { class: "chip", style: { "--c": sess.supported ? "var(--c-assistant)" : "var(--c-other)" } }, sess.provider),
-          sess.supported ? null : h("span", { class: "muted", style: { fontSize: "12px" } }, "only Claude Code sessions can be visualised so far")),
+          h("span", { class: "chip", style: { "--c": sess.supported ? "var(--c-assistant)" : "var(--c-other)" } }, sess.harness ?? sess.provider),
+          sess.supported ? null : h("span", { class: "muted", style: { fontSize: "12px" } }, "the visualizer does not understand this provider yet")),
         h("div", { class: "turns" }, sess.turns.map((t) => h("a", {
           class: "turn-card" + (sess.supported ? "" : " disabled"),
           href: `#/turn/${encodeURIComponent(sess.dir)}/${encodeURIComponent(t.dir)}`,
@@ -139,9 +139,9 @@ async function homePage() {
     h("div", { class: "intro" },
       h("div", null,
         h("h1", null, "What really happens when you ", h("em", null, "press Enter")),
-        h("p", null, "Agent X-Ray replays a real Claude Code turn from the proxy's logs. It shows the loop, the hidden system prompt, the tools, the context Claude Code injects, and the background calls you never see. It's built for explaining how a coding agent works."),
+        h("p", null, "Agent X-Ray replays a real Claude Code or Codex CLI turn from the proxy's logs. It shows the loop, the hidden system prompt, the tools, the context the harness injects, and the background calls you never see. It's built for explaining how a coding agent works."),
         h("p", { class: "how muted" },
-          "1. ", h("code", null, "npm start"), "  2. ", h("code", null, "ANTHROPIC_BASE_URL=http://127.0.0.1:8787 claude"), "  3. ask it something, then pick the turn below.")),
+          "1. ", h("code", null, "npm start"), "  2. ", h("code", null, "ANTHROPIC_BASE_URL=http://127.0.0.1:8787 claude"), "  (or ", h("code", null, "npm run start:codex"), " and the ", h("code", null, "codex -c …"), " line it prints)  3. ask it something, then pick the turn below.")),
       introArt()),
     list);
   await load();

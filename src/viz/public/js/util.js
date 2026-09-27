@@ -76,19 +76,36 @@ export const fmt = {
 
 /* ----------------------------------------------------------- categories */
 
-export const CATS = {
-  system: { label: "System prompt", who: "Claude Code", icon: "◆", about: "Instructions Claude Code writes for the model: who it is, how to behave, how to use tools. The user never sees it, and it is sent in full with every request." },
-  tools: { label: "Tool definitions", who: "Claude Code", icon: "▦", about: "The name, description and JSON schema of every tool the model may call. They are sent with every request because the model has no other way to know they exist." },
+// "{h}" is the harness's name, filled in by setHarness().
+const CAT_TEXT = {
+  system: { label: "System prompt", who: "{h}", icon: "◆", about: "Instructions {h} writes for the model: who it is, how to behave, how to use tools. The user never sees it, and it is sent in full with every request." },
+  tools: { label: "Tool definitions", who: "{h}", icon: "▦", about: "The name, description and JSON schema of every tool the model may call. They are sent with every request because the model has no other way to know they exist." },
   prompt: { label: "You typed", who: "You", icon: "❯", about: "The words you actually typed. Often the smallest thing in the request." },
-  reminder: { label: "Injected context", who: "Claude Code", icon: "⚙", about: "Text the harness slips into the conversation for you: <system-reminder> blocks (CLAUDE.md, environment, dates, todo state) and mid-conversation system messages. It looks like part of your message to the model, but you never typed it." },
-  synthetic: { label: "Harness prompt", who: "Claude Code", icon: "✎", about: "A whole prompt Claude Code wrote to the model on its own behalf, e.g. \"name this session\" or \"predict what the user types next\"." },
+  reminder: { label: "Injected context", who: "{h}", icon: "⚙", about: "Text the harness slips into the conversation for you: <system-reminder> blocks (CLAUDE.md, environment, dates, todo state) and mid-conversation system messages. It looks like part of your message to the model, but you never typed it." },
+  synthetic: { label: "Harness prompt", who: "{h}", icon: "✎", about: "A whole prompt {h} wrote to the model on its own behalf, e.g. \"name this session\" or \"predict what the user types next\"." },
   assistant: { label: "Model text", who: "Model", icon: "✦", about: "Text the model wrote. Once written, it is sent back in every later request, because the model does not remember it." },
   thinking: { label: "Thinking", who: "Model", icon: "☁", about: "The model's reasoning. It streams back first, and its signature is replayed on later requests so the model can keep reasoning consistently." },
-  tool_use: { label: "Tool call", who: "Model", icon: "→", about: "The model cannot run anything. It emits a structured request, and Claude Code executes it on your machine." },
-  tool_result: { label: "Tool output", who: "Your machine", icon: "←", about: "What the tool printed, captured by Claude Code and handed back to the model in the next request." },
+  tool_use: { label: "Tool call", who: "Model", icon: "→", about: "The model cannot run anything. It emits a structured request, and {h} executes it on your machine." },
+  tool_result: { label: "Tool output", who: "Your machine", icon: "←", about: "What the tool printed, captured by {h} and handed back to the model in the next request." },
   media: { label: "Image / document", who: "You", icon: "▣", about: "An attachment." },
   other: { label: "Other", who: "?", icon: "·", about: "A block type the visualizer does not have a special view for." },
 };
+
+/** Category labels and explanations, worded for the harness on screen. */
+export const CATS = {};
+
+/** Re-words `CATS` for a turn's harness (`turn.harness` from the digest). */
+export function setHarness(harness) {
+  const name = harness?.name ?? "the harness";
+  for (const [cat, base] of Object.entries(CAT_TEXT)) {
+    CATS[cat] = {
+      ...base,
+      who: base.who.replaceAll("{h}", name),
+      about: (harness?.about?.[cat] ?? base.about).replaceAll("{h}", name),
+    };
+  }
+}
+setHarness({ name: "Claude Code" });
 
 export const catVar = (cat) => `var(--c-${cat in CATS ? cat : "other"})`;
 
@@ -109,6 +126,7 @@ export const isBackground = (r) => r.kind !== "main" || !!r.agentId;
 
 /** Everything the views derive from the raw digest, computed once. */
 export function enrich(turn) {
+  setHarness(turn.harness);
   const byKey = new Map(turn.requests.map((r) => [r.key, r]));
   const blobs = turn.blobs;
 
@@ -210,7 +228,7 @@ function dominant(refs, blobs) {
 
 function messageTitle(m, cats, blobs) {
   const set = new Set(cats);
-  if (m.role === "system") return "system · injected context";
+  if (m.role === "system" || m.role === "developer") return `${m.role} · injected context`;
   if (set.has("tool_result")) {
     const n = cats.filter((c) => c === "tool_result").length;
     return `${m.role} · ${n > 1 ? n + " tool outputs" : "tool output"}`;

@@ -78,7 +78,7 @@ export function inspector(ctx) {
       h("div", { class: "section-head" },
         h("span", { class: "kicker" }, "03 · Take any request apart"),
         h("h2", null, "The request inspector"),
-        h("p", null, "Pick a request. Every role is colour-coded: what you typed, what Claude Code injected, what the model wrote, and what your machine returned. Click any block for the full text.")),
+        h("p", null, `Pick a request. Every role is colour-coded: what you typed, what ${turn.harness.name} injected, what the model wrote, and what your machine returned. Click any block for the full text.`)),
       filmstrip,
       h("div", { class: "panel" }, tabs, body)),
     select,
@@ -105,19 +105,21 @@ function conversation(ctx, r) {
       const fresh = states.some((st) => st === "new" || st === "echo");
       if (onlyNew && r.diff.hasPrev && !fresh) return;
       const cats = new Set(m.refs.map((x) => turn.blobs[x.b]?.cat));
-      const roleCls = m.role === "assistant" ? "role-assistant" : m.role === "system" ? "role-system" : "role-user";
+      const roleCls = m.role === "assistant" ? "role-assistant" : m.role === "system" || m.role === "developer" ? "role-system" : "role-user";
       const tag = !r.diff.hasPrev ? null
         : states.includes("echo") ? chip("⤺ the model's own reply, echoed back", "assistant", "badge-echo")
         : fresh ? chip("✦ new in this request", "prompt", "badge-new")
         : chip("↻ re-sent unchanged", "other", "badge-carried");
-      const note = m.role === "system" ? "a system message in the middle of the conversation, written by Claude Code"
+      const who = turn.harness.name;
+      const note = m.role === "system" || m.role === "developer" ? `a ${m.role} message in the middle of the conversation, written by ${who}`
+        : m.role === "tool" ? "tool output from your machine"
         : m.role === "user" && cats.has("tool_result") && !cats.has("prompt") ? "sent as “user”, but it's tool output from your machine"
-        : m.role === "user" && !cats.has("prompt") && cats.has("reminder") ? "sent as “user”, but written by Claude Code"
+        : m.role === "user" && !cats.has("prompt") && cats.has("reminder") ? `sent as “user”, but written by ${who}`
         : "";
       list.append(h("div", { class: `msg ${roleCls}` + (r.diff.hasPrev && !fresh ? " faded" : "") },
         h("div", { class: "msg-head" },
           h("span", { class: "role" }, m.role),
-          h("span", { class: "faint mono" }, `messages[${i}]`),
+          h("span", { class: "faint mono" }, m.label ?? `messages[${i}]`),
           note ? h("span", { class: "muted", style: { fontSize: "12px" } }, note) : null,
           h("span", { class: "spacer" }), tag),
         h("div", { class: "msg-body" }, m.refs.map((x) => blockView(ctx, r, x, showReminders)))));
@@ -127,7 +129,7 @@ function conversation(ctx, r) {
         h("div", { class: "msg-head" },
           h("span", { class: "role" }, "↩ reply"),
           h("span", { class: "muted", style: { fontSize: "12px" } }, "what the model sent back to this request. It isn't part of the request, but it will be in the next one"),
-          h("span", { class: "spacer" }), r.stopReason ? chip(`stop_reason: ${r.stopReason}`, "assistant") : null),
+          h("span", { class: "spacer" }), r.stopReason ? chip(`${turn.harness.stopField}: ${r.stopReason}`, "assistant") : null),
         h("div", { class: "msg-body" }, r.response.length ? r.response.map((x) => blockView(ctx, r, x, true, true)) : jsonView(r.responseRaw, 3))));
     }
   };
@@ -159,7 +161,7 @@ function blockView(ctx, r, ref, expandReminders, isReply = false) {
   let title = meta.label;
   if (b.cat === "tool_use") title = `Tool call → ${b.name}`;
   if (b.cat === "tool_result") title = `${b.isError ? "Tool error" : "Tool output"} ← ${turn.toolNameById.get(b.toolUseId) ?? "tool"}`;
-  if (b.cat === "reminder") title = "Injected by Claude Code";
+  if (b.cat === "reminder") title = `Injected by ${turn.harness.name}`;
 
   const content = b.cat === "tool_use" ? code(b.text)
     : b.cat === "tool_result" || b.cat === "thinking" ? code(big ? b.text.slice(0, 1400) + "\n…" : b.text)
@@ -274,7 +276,7 @@ function toolsTab(ctx, r) {
     for (const t of tools) {
       if (q && !t.name.toLowerCase().includes(q) && !t.text.toLowerCase().includes(q)) continue;
       const m = /^mcp__(.+?)__/.exec(t.name);
-      const g = m ? `MCP server · ${m[1]}` : "Built into Claude Code";
+      const g = t.group ?? (m ? `MCP server · ${m[1]}` : `Built into ${turn.harness.name}`);
       if (!groups.has(g)) groups.set(g, []);
       groups.get(g).push(t);
     }
@@ -368,7 +370,7 @@ function streamChart(r) {
 /* -------------------------------------------------------------- params */
 
 const PARAM_NOTES = {
-  model: "Which model answers. Claude Code can use different models for the main loop and for background calls.",
+  model: "Which model answers. The harness can use different models for the main loop and for background calls.",
   max_tokens: "The ceiling on output tokens for this reply.",
   stream: "Server-sent events: the reply arrives token by token instead of all at once.",
   thinking: "Extended thinking: the model may reason before answering.",
@@ -377,6 +379,14 @@ const PARAM_NOTES = {
   metadata: "Opaque identifiers (device, account, session) for abuse detection and rate limits.",
   temperature: "Sampling randomness.",
   tool_choice: "Whether the model must, may, or must not call a tool.",
+  // OpenAI Responses API, as Codex drives it.
+  reasoning: "How hard the model thinks before answering (effort), and whether a summary of that reasoning comes back.",
+  text: "Output settings, such as verbosity.",
+  parallel_tool_calls: "Whether the model may ask for several tools in one reply.",
+  store: "Whether the API keeps this response server-side. Codex says no and re-sends the whole conversation instead.",
+  include: "Extra fields to return. reasoning.encrypted_content brings the model's reasoning back as ciphertext, so it can be replayed next request.",
+  prompt_cache_key: "Groups requests for the prompt cache. Codex uses the session id, so every lap of a session hits the same cache.",
+  client_metadata: "Identifiers the client attaches: session, thread, turn.",
 };
 
 const BETA_NOTES = {
@@ -404,7 +414,7 @@ function paramsTab(ctx, r) {
   return h("div", null,
     h("div", { class: "subhead", style: { marginTop: 0 } }, `Request · ${r.path ?? ""}`),
     h("table", { class: "t" }, h("tr", null, h("th", null, "Body field"), h("th", null, "Value"), h("th", null, "What it does")), rows,
-      h("tr", null, h("td", { class: "k" }, "system / tools / messages"), h("td", { class: "v" }, `${r.system.length} / ${r.tools.length} / ${r.messages.length}`), h("td", { class: "explain" }, "See the other tabs."))),
+      h("tr", null, h("td", { class: "k" }, "system / tools / conversation"), h("td", { class: "v" }, `${r.system.length} / ${r.tools.length} / ${r.messages.length}`), h("td", { class: "explain" }, "See the other tabs."))),
     betas.length ? [h("div", { class: "subhead" }, "Beta features switched on (anthropic-beta)"),
       h("div", { class: "betas" }, betas.map((b) => {
         const note = Object.entries(BETA_NOTES).find(([k]) => b.startsWith(k))?.[1];
@@ -412,10 +422,10 @@ function paramsTab(ctx, r) {
       }))] : null,
     h("div", { class: "subhead" }, "Request headers"),
     h("p", { class: "muted", style: { fontSize: "13px", marginTop: 0 } }, "Credentials were redacted by the proxy before they reached disk."),
-    h("table", { class: "t" }, headerRows(r.headers, (k) => /^(x-claude|anthropic|authorization|user-agent)/.test(k))),
+    h("table", { class: "t" }, headerRows(r.headers, (k) => /^(x-claude|anthropic|x-codex|openai|session-id|thread-id|authorization|user-agent)/.test(k))),
     Object.keys(r.responseHeaders).length ? [h("div", { class: "subhead" }, "Response headers"),
-      h("p", { class: "muted", style: { fontSize: "13px", marginTop: 0 } }, "The highlighted rows are how Claude Code learns your rate-limit status."),
-      h("table", { class: "t" }, headerRows(r.responseHeaders, (k) => /ratelimit|request-id/.test(k)))] : null);
+      h("p", { class: "muted", style: { fontSize: "13px", marginTop: 0 } }, `The highlighted rows are how ${ctx.turn.harness.name} learns your rate-limit status.`),
+      h("table", { class: "t" }, headerRows(r.responseHeaders, (k) => /ratelimit|request-id|x-codex-(primary|secondary|credits)/.test(k)))] : null);
 }
 
 /* ----------------------------------------------------------------- raw */

@@ -43,7 +43,7 @@ function buildSteps(turn) {
     steps.push({ type: "send", r, lap }, { type: "think", r, lap }, { type: "reply", r, lap });
     const calls = toolCalls(turn, r);
     const next = mains[mains.indexOf(r) + 1];
-    if (r.stopReason === "tool_use" && calls.length) steps.push({ type: "tool", r, lap, calls, next });
+    if (r.stop === "tool_use" && calls.length) steps.push({ type: "tool", r, lap, calls, next });
     if (r === lastMain) steps.push({ type: "answer", r, lap });
   }
   if (!prompted) steps.push({ type: "prompt" });
@@ -63,6 +63,8 @@ function share(part, whole) {
 
 function narrate(turn, step) {
   const r = step.r;
+  const who = turn.harness.name;
+  const stopCode = `<code>${esc(turn.harness.stopField)}: ${esc(r?.stopReason ?? r?.stop ?? "")}</code>`;
   const tok = (chars) => fmt.k(chars * turn.tokPerChar);
   const mains = turn.requests.filter(isMain);
   switch (step.type) {
@@ -71,7 +73,7 @@ function narrate(turn, step) {
       const bg = turn.requests.length - mains.length;
       return {
         title: "You type a prompt and press Enter",
-        body: `<b>${fmt.n(n)} characters.</b> Everything that follows (${mains.length} trip${mains.length === 1 ? "" : "s"} round the agent loop and ${bg} background call${bg === 1 ? "" : "s"}) is Claude Code turning those characters into work.`,
+        body: `<b>${fmt.n(n)} characters.</b> Everything that follows (${mains.length} trip${mains.length === 1 ? "" : "s"} round the agent loop and ${bg} background call${bg === 1 ? "" : "s"}) is ${who} turning those characters into work.`,
       };
     }
     case "send": {
@@ -82,7 +84,7 @@ function narrate(turn, step) {
       if (!r.diff.hasPrev) {
         const reminders = r.messages.flatMap((m) => m.refs).filter((x) => turn.blobs[x.b]?.cat === "reminder").length;
         return {
-          title: `Lap ${step.lap} · Claude Code packs the first request`,
+          title: `Lap ${step.lap} · ${who} packs the first request`,
           body: `It is much more than your prompt: the <b>system prompt</b> (${fmt.chars(sys?.chars ?? 0)}), <b>${r.tools.length} tool definitions</b> (${fmt.chars(tools?.chars ?? 0)}) and the conversation, where your prompt sits next to <b>${reminders} block${reminders === 1 ? "" : "s"} of injected context</b>. About <b>${tok(r.sentChars)} tokens</b> in all. Your own words are <b>${share(promptChars, r.sentChars)}</b> of it.`,
         };
       }
@@ -110,7 +112,7 @@ function narrate(turn, step) {
       for (const [k, n] of Object.entries(counts)) newBits.push(`${words[k] ?? k}${n > 1 ? ` ×${n}` : ""}`);
       return {
         title: `Lap ${step.lap} · Everything again, plus what's new`,
-        body: `The model kept nothing from the last lap, so Claude Code sends the whole thing again: <b>${share(r.diff.carriedChars, r.sentChars)}</b> of this request is exactly what it sent last time. New this lap: <b>${newBits.join(" · ") || "nothing"}</b>. This is how an agent "remembers".`,
+        body: `The model kept nothing from the last lap, so ${who} sends the whole thing again: <b>${share(r.diff.carriedChars, r.sentChars)}</b> of this request is exactly what it sent last time. New this lap: <b>${newBits.join(" · ") || "nothing"}</b>. This is how an agent "remembers".`,
       };
     }
     case "think": {
@@ -129,17 +131,17 @@ function narrate(turn, step) {
       const t = r.tokens;
       const think = r.thinkingTokens ? ` It reasoned first (${fmt.n(r.thinkingTokens)} thinking tokens).` : "";
       if (r.status && r.status >= 400) {
-        return { title: `The API refused: HTTP ${r.status}`, body: `No answer this time. Claude Code will usually retry. ${esc(JSON.stringify(r.responseRaw ?? r.error ?? "")).slice(0, 200)}` };
+        return { title: `The API refused: HTTP ${r.status}`, body: `No answer this time. ${who} will usually retry. ${esc(JSON.stringify(r.responseRaw ?? r.error ?? "")).slice(0, 200)}` };
       }
-      if (r.stopReason === "tool_use") {
+      if (r.stop === "tool_use") {
         const names = [...new Set(toolCalls(turn, r).map((b) => b.name))].join(", ");
         return {
           title: `It answers with a tool call: ${names}`,
-          body: `<code>stop_reason: tool_use</code>. The model can't touch your machine, so it asks Claude Code to run something for it.${think} ${fmt.n(t?.output)} tokens out, in ${fmt.ms(r.durationMs)}.`,
+          body: `${stopCode}. The model can't touch your machine, so it asks ${who} to run something for it.${think} ${fmt.n(t?.output)} tokens out, in ${fmt.ms(r.durationMs)}.`,
         };
       }
-      if (r.stopReason === "end_turn") {
-        return { title: "It answers in plain text", body: `<code>stop_reason: end_turn</code>. There's no tool call this time, so the loop stops here.${think} ${fmt.n(t?.output)} tokens out.` };
+      if (r.stop === "end_turn") {
+        return { title: "It answers in plain text", body: `${stopCode}. There's no tool call this time, so the loop stops here.${think} ${fmt.n(t?.output)} tokens out.` };
       }
       return { title: `The stream ends: ${r.stopReason ?? "no stop reason"}`, body: `${fmt.n(t?.output)} tokens out.` };
     }
@@ -150,7 +152,7 @@ function narrate(turn, step) {
         : 0;
       const list = step.calls.map((c) => `<code>${esc(c.label)}</code>`).join(", ");
       return {
-        title: `Claude Code runs ${[...new Set(step.calls.map((c) => c.name))].join(" + ")} on your machine`,
+        title: `${who} runs ${[...new Set(step.calls.map((c) => c.name))].join(" + ")} on your machine`,
         body: `${list}. The output${outChars ? ` (${fmt.chars(outChars)})` : ""} goes onto the end of the conversation.${gap !== undefined ? ` Time on your side before the next lap: <b>${fmt.ms(gap)}</b>${gap > 4000 ? ", which includes you answering any permission prompt" : ""}.` : ""}`,
       };
     }
@@ -176,7 +178,7 @@ function narrate(turn, step) {
 
 /* ------------------------------------------------------------------ stage */
 
-function stageSvg() {
+function stageSvg(info) {
   const box = (x, y, w, hh, cls = "node-box") => s("rect", { x, y, width: w, height: hh, rx: 18, class: cls });
   const svg = s("svg", { viewBox: "0 0 1000 560", role: "img", "aria-label": "Agent loop animation" });
   const defs = s("defs", null,
@@ -219,7 +221,7 @@ function stageSvg() {
   const status = s("text", { x: 252, y: 370, class: "node-mono" }, "idle");
   const tower = s("g");
   const harness = s("g", null, harnessBox, lap,
-    s("text", { x: 252, y: 247, class: "node-title" }, "Claude Code"),
+    s("text", { x: 252, y: 247, class: "node-title" }, info.name),
     s("text", { x: 252, y: 266, class: "node-sub" }, "the harness · runs on your laptop"),
     s("text", { x: 252, y: 284, class: "node-sub" }, "keeps the conversation"),
     s("rect", { x: 486, y: 228, width: 34, height: 144, rx: 6, fill: "var(--line)" }),
@@ -242,7 +244,7 @@ function stageSvg() {
   const model = s("g", null, modelBox,
     s("circle", { cx: 870, cy: 318, r: 44, fill: "url(#brain)" }),
     ...pulses, nodes,
-    s("text", { x: 787, y: 247, class: "node-title" }, "Claude API"),
+    s("text", { x: 787, y: 247, class: "node-title" }, info.api),
     modelName,
     s("text", { x: 953, y: 247, class: "node-mono", "text-anchor": "end" }, "stateless"),
     readBg, readCache, readFresh, readText);
@@ -272,7 +274,7 @@ function stageSvg() {
 export function theater(ctx) {
   const { turn } = ctx;
   const steps = buildSteps(turn);
-  const st = stageSvg();
+  const st = stageSvg(turn.harness);
   const maxChars = Math.max(1, ...turn.requests.map((r) => r.sentChars));
 
   let i = 0;
@@ -385,7 +387,7 @@ export function theater(ctx) {
     st.readFresh.setAttribute("width", 0);
     st.readFresh.setAttribute("x", 790);
     st.readText.textContent = "";
-    st.modelName.textContent = (r?.model ?? turn.requests.find(isMain)?.model ?? "").replace(/^claude-/, "claude-");
+    st.modelName.textContent = (r?.model ?? turn.requests.find(isMain)?.model ?? "");
 
     const mainNow = step.type === "bg" ? lastMainBefore(k) : r;
     drawTower(mainNow && isMain(mainNow) ? mainNow : lastMainBefore(k), false);
@@ -493,9 +495,9 @@ export function theater(ctx) {
         await Promise.all(dots);
         if (!alive(t)) return false;
         st.harnessBox.classList.add("active-box");
-        const label = r.stopReason === "tool_use"
+        const label = r.stop === "tool_use"
           ? pill(`→ ${[...new Set(toolCalls(turn, r).map((b) => b.name))].join(", ")}`, "var(--c-tool_use)")
-          : pill(r.status >= 400 ? `HTTP ${r.status}` : `✓ ${r.stopReason ?? "done"}`, r.status >= 400 ? "var(--c-error)" : "var(--c-assistant)");
+          : pill(r.status >= 400 ? `HTTP ${r.status}` : `✓ ${r.stopReason ?? r.stop ?? "done"}`, r.status >= 400 ? "var(--c-error)" : "var(--c-assistant)");
         label.setAttribute("transform", "translate(385,200)");
         st.packets.append(label);
         return wait(400, t);
@@ -596,10 +598,10 @@ export function theater(ctx) {
 
   const youBubble = h("div", { class: "bubble you", style: { left: "1%", top: "4%" } },
     h("span", { class: "who" }, "You typed"), oneLine(turn.turn.userInput, 220));
-  const firstAnswer = [...turn.requests].reverse().find((r) => isMain(r) && r.stopReason === "end_turn") ?? [...turn.requests].reverse().find(isMain);
+  const firstAnswer = [...turn.requests].reverse().find((r) => isMain(r) && r.stop === "end_turn") ?? [...turn.requests].reverse().find(isMain);
   const answerText = firstAnswer?.response.map((x) => turn.blobs[x.b]).filter((b) => b?.cat === "assistant").map((b) => b.text).join("\n") ?? "";
   const answerBubble = h("div", { class: "bubble answer", style: { left: "1%", top: "72%", maxWidth: "21.5%", maxHeight: "26%" } },
-    h("span", { class: "who" }, "Claude Code replied"), oneLine(answerText || "(no text)", 200));
+    h("span", { class: "who" }, `${turn.harness.name} replied`), oneLine(answerText || "(no text)", 200));
 
   const stage = h("div", { class: "stage" }, st.svg, youBubble, answerBubble);
   const narrH = h("h3");
@@ -656,7 +658,7 @@ export function theater(ctx) {
     clear(suitcase);
     if (!r) {
       suitcase.append(
-        h("div", { class: "stack-head" }, h("h3", null, "What goes to the model"), h("div", { class: "sub" }, "Nothing has been sent yet. Step forward to watch Claude Code pack the first request.")),
+        h("div", { class: "stack-head" }, h("h3", null, "What goes to the model"), h("div", { class: "sub" }, `Nothing has been sent yet. Step forward to watch ${turn.harness.name} pack the first request.`)),
         legend());
       return;
     }
@@ -765,7 +767,7 @@ export function theater(ctx) {
     h("div", { class: "section-head" },
       h("span", { class: "kicker" }, "01 · The agent loop"),
       h("h2", null, "Watch the turn happen"),
-      h("p", null, "Press play, or step with ← →. Claude Code runs on your machine; the model lives behind an API and remembers nothing between calls. Every lap round this loop is one HTTP request, and every request carries the whole conversation.")),
+      h("p", null, `Press play, or step with ← →. ${turn.harness.name} runs on your machine; the model lives behind an API and remembers nothing between calls. Every lap round this loop is one HTTP request, and every request carries the whole conversation.`)),
     wrap);
 
   scene(0);
@@ -825,7 +827,7 @@ function ganttView(turn, onPick) {
     svg.append(s("rect", { x: L, y, width: W - L - 10, height: LH, rx: 6, fill: "var(--bg-2)" }));
   });
 
-  // Local time between laps: what Claude Code was doing on your machine.
+  // Local time between laps: what the harness was doing on your machine.
   const mains = reqs.filter(lanes[0].test);
   for (let k = 0; k + 1 < mains.length; k++) {
     const a = mains[k].start + (mains[k].durationMs ?? 0);

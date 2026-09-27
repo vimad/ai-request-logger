@@ -1,0 +1,270 @@
+/**
+ * The shape the visualizer draws, and the pieces every provider's digest
+ * shares: the content-addressed blob store and a few small readers.
+ *
+ * A provider plugs in as a `VizAdapter`: it knows how to take one request
+ * apart into system / tools / messages / response blobs, how to read its
+ * token usage, and what to call itself on screen. Everything else - finding
+ * turns, pulling in background calls, threading requests for "what is new"
+ * diffs - is the same for every harness and lives in `digest.ts`.
+ */
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+import type { TokenBreakdown } from "../core/types.ts";
+import { sha1 } from "../core/util.ts";
+
+/* ------------------------------------------------------------------ shape */
+
+/**
+ * What a piece of context *is*, from the point of view of someone learning how
+ * an agent works. Colour in the UI is keyed on this.
+ */
+export type Category =
+  | "system" //       the system prompt
+  | "tools" //        a tool definition
+  | "prompt" //       what the human typed
+  | "reminder" //     text the harness injected: <system-reminder>, role:system
+  | "synthetic" //    a whole prompt the harness wrote to itself
+  | "assistant" //    model text
+  | "thinking" //     model reasoning
+  | "tool_use" //     model asking for a tool
+  | "tool_result" //  what the tool printed, handed back
+  | "media" //        image / document
+  | "other";
+
+export interface Blob {
+  id: string;
+  cat: Category;
+  /** Size of the normalised JSON, the honest measure of what is on the wire. */
+  chars: number;
+  /** A one-line name for lists and tooltips. */
+  label: string;
+  /** The readable body: prompt text, tool description, tool output... */
+  text: string;
+  name?: string;
+  toolUseId?: string;
+  isError?: boolean;
+  /** tool_use input, or a tool definition's input_schema. */
+  json?: unknown;
+  /** For a tool definition: the namespace it was declared in, if any. */
+  group?: string;
+}
+
+export interface Ref {
+  b: string;
+  /** This block carried a `cache_control` breakpoint. */
+  cache?: boolean;
+}
+
+export interface VizMessage {
+  role: string;
+  refs: Ref[];
+  /** Where it sits in the request body, when that is not `messages[i]`. */
+  label?: string;
+}
+
+export interface Purpose {
+  id: string;
+  label: string;
+  explain: string;
+}
+
+export interface StreamBlock {
+  index: number;
+  type: string;
+  start: number;
+  end: number;
+  deltas: number;
+}
+
+export interface StreamSummary {
+  events: number;
+  blocks: StreamBlock[];
+  firstEvent?: number;
+  lastEvent?: number;
+}
+
+/**
+ * How the model's reply ended, in the loop's own terms: `tool_use` means the
+ * harness runs something and goes round again, `end_turn` means it stops.
+ * Anything else is the provider's raw value (`max_tokens`, `incomplete`...).
+ */
+export type Stop = "tool_use" | "end_turn" | (string & {});
+
+export interface VizRequest {
+  /** Unique within the turn view: `bg1` for a background-turn request, `r3` otherwise. */
+  key: string;
+  n: number;
+  dir: string;
+  /** Filed under turn-000__background rather than this turn. */
+  fromBackground: boolean;
+  at: number;
+  /** Milliseconds after the first request in this view. */
+  start: number;
+  durationMs?: number;
+  ttfbMs?: number;
+  kind: string;
+  agentId?: string;
+  purpose: Purpose;
+  model?: string;
+  stream: boolean;
+  status?: number;
+  error?: string;
+  /** The provider's own stop value, as it appears on the wire. */
+  stopReason?: string;
+  /** The same, normalised for the loop (see `Stop`). */
+  stop?: Stop;
+  path?: string;
+  /** Every body field that is not system / tools / conversation. */
+  params: Record<string, unknown>;
+  headers: Record<string, string>;
+  responseHeaders: Record<string, string>;
+  system: Ref[];
+  tools: Ref[];
+  messages: VizMessage[];
+  response: Ref[];
+  /** Raw response body when it was not a message (errors, mostly). */
+  responseRaw?: unknown;
+  tokens?: TokenBreakdown;
+  thinkingTokens?: number;
+  /** Characters of system + tools + messages, normalised. */
+  sentChars: number;
+  /** The previous request on the same thread, for "what is new" diffs. */
+  prevKey?: string;
+  stream_?: StreamSummary;
+}
+
+/** What the page calls the harness, and how it words the parts that differ. */
+export interface HarnessInfo {
+  /** `session.json` provider id. */
+  id: string;
+  /** "Claude Code", "Codex CLI". */
+  name: string;
+  /** The box on the right of the stage: "Claude API". */
+  api: string;
+  /** The response field that says why the reply ended, as the wire spells it. */
+  stopField: string;
+  /** Overrides for a category's explanation, where this harness differs. */
+  about: Partial<Record<Category, string>>;
+}
+
+export interface VizTurn {
+  provider: string;
+  harness: HarnessInfo;
+  session: { dir: string; id: string; startedAt?: string };
+  turn: { dir: string; index: number; label: string; userInput: string; startedAt?: string };
+  /** Where `fromBackground` requests live, for fetching their raw files. */
+  backgroundDir?: string;
+  t0: number;
+  blobs: Record<string, Blob>;
+  requests: VizRequest[];
+  warnings: string[];
+}
+
+export interface TurnListing {
+  dir: string;
+  index: number;
+  label: string;
+  startedAt?: string;
+  requests: number;
+  main: number;
+  background: number;
+  durationMs: number;
+  tokens: number;
+}
+
+export interface SessionListing {
+  dir: string;
+  id: string;
+  provider: string;
+  /** The harness's display name, when the visualizer understands it. */
+  harness?: string;
+  supported: boolean;
+  startedAt?: string;
+  updatedAt?: string;
+  turns: TurnListing[];
+}
+
+/* -------------------------------------------------------------- adapter */
+
+/** The provider-specific half of one digested request. */
+export interface RequestParts {
+  system: Ref[];
+  tools: Ref[];
+  messages: VizMessage[];
+  response: Ref[];
+  responseRaw?: unknown;
+  params: Record<string, unknown>;
+  purpose: Purpose;
+  stop?: Stop;
+  thinkingTokens?: number;
+  stream_?: StreamSummary;
+}
+
+export interface VizAdapter {
+  harness: HarnessInfo;
+  /** The provider's `renderer.tokens`: raw usage into the neutral breakdown. */
+  tokens(usage: unknown): TokenBreakdown;
+  /** Take one request apart. `req` and `res` are request.json and response.json. */
+  request(store: BlobStore, req: any, res: any, reqDir: string): RequestParts;
+}
+
+/* -------------------------------------------------------------- helpers */
+
+export function readJson(path: string): any {
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return undefined;
+  }
+}
+
+export function dirsIn(path: string, prefix: string): string[] {
+  if (!existsSync(path)) return [];
+  return readdirSync(path)
+    .filter((n) => n.startsWith(prefix) && statSync(join(path, n)).isDirectory())
+    .sort();
+}
+
+export function oneLine(text: string, max = 90): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length <= max ? flat : flat.slice(0, max - 1) + "…";
+}
+
+/** stream.jsonl, one `{ at, event, data }` per line; unreadable lines skipped. */
+export function readStream(path: string): Array<{ at: number; event?: string; data: any }> | undefined {
+  let raw: string;
+  try {
+    raw = readFileSync(path, "utf8");
+  } catch {
+    return undefined;
+  }
+  const out: Array<{ at: number; event?: string; data: any }> = [];
+  for (const line of raw.split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const ev = JSON.parse(line);
+      out.push({ at: typeof ev.at === "number" ? ev.at : 0, event: ev.event, data: ev.data ?? {} });
+    } catch {}
+  }
+  return out;
+}
+
+export class BlobStore {
+  readonly blobs: Record<string, Blob> = {};
+
+  put(cat: Category, normalised: unknown, make: () => Omit<Blob, "id" | "cat" | "chars">): string {
+    const json = JSON.stringify(normalised);
+    // Category is part of the identity: the same text as a prompt and as a
+    // system block are different things to the reader.
+    const id = sha1(cat + "\u0000" + json).slice(0, 14);
+    if (!this.blobs[id]) this.blobs[id] = { id, cat, chars: json.length, ...make() };
+    return id;
+  }
+}
+
+export const PLUMBING: Purpose = {
+  id: "plumbing",
+  label: "API plumbing",
+  explain: "Not an inference call. The harness talks to other endpoints too, for things like listing models or counting tokens.",
+};

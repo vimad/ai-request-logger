@@ -186,7 +186,7 @@ export function matrix(ctx) {
         h("b", null, "byte-for-byte identical"), " to what the previous request on the same thread sent. The dashed block under a column is the model's reply, and you can follow it into the next column, where it is sent back as input. Outlined columns are background calls.")),
     h("div", { class: "panel matrix-wrap" },
       h("div", { class: "matrix-tools" },
-        h("span", null, "Across ", h("b", null, `${reqs.length} requests`), " Claude Code sent ", h("b", null, fmt.chars(totalSent)), ". Only ", h("b", null, fmt.chars(uniqueChars)), ` of that was distinct: the other `, h("b", null, totalSent ? `${Math.round((1 - uniqueChars / totalSent) * 100)}%` : "0%"), " was re-sending."),
+        h("span", null, "Across ", h("b", null, `${reqs.length} requests`), ` ${turn.harness.name} sent `, h("b", null, fmt.chars(totalSent)), ". Only ", h("b", null, fmt.chars(uniqueChars)), ` of that was distinct: the other `, h("b", null, totalSent ? `${Math.round((1 - uniqueChars / totalSent) * 100)}%` : "0%"), " was re-sending."),
         h("span", { class: "spacer" }), toggle),
       holder,
       h("div", { class: "legend", style: { marginTop: "8px" } },
