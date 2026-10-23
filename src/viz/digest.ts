@@ -196,6 +196,13 @@ export function digestTurn(logDir: string, sessionName: string, turnName: string
 
 /* ------------------------------------------------------------- listing */
 
+/** Distinct `model` values of a turn's requests, agent-loop requests first. */
+function modelsOf(reqs: any[]): string[] {
+  const loop = (r: any) => r.kind === "main" && !r.agentId;
+  const ordered = [...reqs.filter(loop), ...reqs.filter((r) => !loop(r))];
+  return [...new Set(ordered.map((r) => r.model).filter((m): m is string => typeof m === "string" && m !== ""))];
+}
+
 export function listSessions(logDir: string): SessionListing[] {
   const out: SessionListing[] = [];
   for (const name of dirsIn(logDir, "")) {
@@ -211,7 +218,7 @@ export function listSessions(logDir: string): SessionListing[] {
       const meta = readJson(join(dir, t, "turn.json")) ?? {};
       const reqs: any[] = Array.isArray(meta.requests) ? meta.requests : [];
       if (counted) {
-        const c = counted.get(t) ?? { requests: 0, durationMs: 0, tokens: 0 };
+        const c = counted.get(t) ?? { requests: 0, durationMs: 0, tokens: 0, models: [] };
         turns.push({
           dir: t,
           index: Number(meta.turn ?? 0),
@@ -222,6 +229,7 @@ export function listSessions(logDir: string): SessionListing[] {
           background: 0,
           durationMs: c.durationMs,
           tokens: c.tokens,
+          models: c.models,
         });
         continue;
       }
@@ -235,6 +243,7 @@ export function listSessions(logDir: string): SessionListing[] {
         background: reqs.filter((r) => r.kind !== "main" || r.agentId).length,
         durationMs: reqs.reduce((n, r) => n + (r.durationMs ?? 0), 0),
         tokens: adapter ? reqs.reduce((n, r) => n + adapter.tokens(r.usage).total, 0) : 0,
+        models: modelsOf(reqs),
       });
     }
     if (turns.length === 0) continue;

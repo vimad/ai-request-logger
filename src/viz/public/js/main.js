@@ -5,7 +5,7 @@ import { closeDrawer } from "./drawer.js";
 import { inspector } from "./inspector.js";
 import { matrix } from "./matrix.js";
 import { theater } from "./theater.js";
-import { clear, enrich, fmt, h, isBackground, promptTokens, s } from "./util.js";
+import { clear, enrich, fmt, h, isBackground, modelChip, promptTokens, s } from "./util.js";
 
 const app = document.getElementById("app");
 const crumbs = document.getElementById("crumbs");
@@ -130,6 +130,7 @@ async function homePage() {
             h("span", null, `${t.background} background`),
             t.tokens ? h("span", null, `${fmt.k(t.tokens)} tokens`) : null,
             h("span", null, fmt.ms(t.durationMs))),
+          t.models?.length ? h("div", { class: "models" }, t.models.map((m) => modelChip(m))) : null,
           h("div", { class: "bars" },
             Array.from({ length: Math.min(40, t.main) }, (_, k) => h("i", { style: { height: `${40 + ((k * 37) % 60)}%` } })),
             Array.from({ length: Math.min(12, t.background) }, () => h("i", { class: "bg", style: { height: "35%" } }))))))));
@@ -222,6 +223,25 @@ async function turnPage(sessionDir, turnDir) {
   }, 4000);
 }
 
+/** "Answered by": every model in the turn, with how many calls each made. */
+function models(reqs) {
+  const by = new Map();
+  for (const r of reqs) {
+    if (!r.model) continue;
+    const c = by.get(r.model) ?? { main: 0, bg: 0 };
+    if (isBackground(r)) c.bg++;
+    else c.main++;
+    by.set(r.model, c);
+  }
+  if (!by.size) return null;
+  const picked = [...new Set(reqs.map((r) => r.params?.requestedModel).filter(Boolean))];
+  const count = ({ main, bg }) => [main && `${main} lap${main === 1 ? "" : "s"}`, bg && `${bg} background`].filter(Boolean).join(" · ");
+  return h("div", { class: "models" },
+    h("span", { class: "label" }, "Answered by"),
+    [...by].sort((a, b) => b[1].main - a[1].main).map(([id, c]) => modelChip(id, h("span", { class: "count" }, count(c)))),
+    picked.length ? h("span", { class: "faint", title: "The model the CLI asked for. The server reports the exact variant it served, which is the name on the chip." }, `you picked ${picked.join(", ")}`) : null);
+}
+
 function hero(turn) {
   const reqs = turn.requests;
   const mains = reqs.filter((r) => !isBackground(r));
@@ -268,6 +288,7 @@ function hero(turn) {
     h("div", { class: "panel prompt-card" },
       h("div", { class: "label" }, `Turn ${turn.turn.index} · you typed`),
       h("blockquote", null, turn.turn.userInput || turn.turn.label),
+      models(reqs),
       amp),
     h("div", { class: "stats" },
       remote

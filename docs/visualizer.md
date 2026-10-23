@@ -30,7 +30,8 @@ read off the wire (see [Cursor](#cursor) below).
 
 1. **The hero.** The prompt you typed, drawn to scale by area against
    everything that was sent to the model for it. Request, token and time
-   totals, with model time split from time spent on your machine.
+   totals, with model time split from time spent on your machine. **Answered
+   by** names every model in the turn with its lap and background counts.
 2. **The agent loop** (animated). *You → Claude Code → Claude API*, with a
    terminal for tools and an arc for background calls. Each lap shows the
    request envelope (sized and coloured by what it carries), the model reading
@@ -53,6 +54,14 @@ read off the wire (see [Cursor](#cursor) below).
    description and SKILL.md path, sized, with the ones used this turn
    highlighted), *Response* (token split and stream timeline), *Params & headers* (beta
    flags explained, rate-limit headers highlighted) and *Raw JSON*.
+
+Model ids are read into names (`claude-opus-5-5` is Claude Opus 5.5,
+`gpt-5.6-terra` is GPT-5.6 Terra) by `modelInfo()` in `util.js`, and drawn as
+chips coloured by who makes the model, not by the harness: Cursor running Grok
+is grey, not Cursor purple. Effort and speed suffixes (`-high-fast`) become
+tags, and the exact id is in the tooltip. The home page's turn cards show them
+too (`TurnListing.models`), and the filmstrip names each request's model when
+a turn mixes models.
 
 Clicking any block, anywhere, opens a drawer with its full text, who wrote it,
 and every request that carried it.
@@ -199,6 +208,10 @@ itself:
 - Tool schemas are added on the server and never reach the CLI. Each known
   tool name gets a small blob, and one stand-in blob is sized to what Cursor
   reports, so the request is still drawn to scale.
+- The model is the `modelName` Cursor attaches to each assistant message,
+  the exact variant it served (`cursor-grok-4.6-high-fast`). When that differs
+  from the `model` the CLI sent (`grok-4.6`), the CLI's choice is kept as
+  `requestedModel` and the hero prints it as "you picked".
 - Tokens are the context-window reading Cursor reports per step. There is no
   cache or output split, so `HarnessInfo.usage` is `"context"` and the page
   doesn't print zeros for them. `remoteLoop` rewords the narration: the

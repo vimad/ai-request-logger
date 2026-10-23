@@ -3,7 +3,7 @@
 
 import { openBlob } from "./drawer.js";
 import { code, highlight, jsonView, markdown, prose } from "./format.js";
-import { CATS, allRefs, catVar, chip, clear, fmt, h, promptTokens, purposeColor, s, store } from "./util.js";
+import { CATS, allRefs, catVar, chip, clear, fmt, h, modelInfo, promptTokens, purposeColor, s, store } from "./util.js";
 
 const TABS = [
   ["conversation", "Conversation"],
@@ -23,6 +23,9 @@ export function inspector(ctx) {
   const tabs = h("div", { class: "tabs" });
   const body = h("div", { class: "tab-body" });
 
+  // Name the model on each card only when the turn uses more than one.
+  const mixed = new Set(turn.requests.map((r) => r.model).filter(Boolean)).size > 1;
+
   function renderFilm() {
     clear(filmstrip);
     for (const r of turn.requests) {
@@ -34,6 +37,7 @@ export function inspector(ctx) {
       },
         h("div", { class: "k" }, `${r.key} `, h("span", { class: "faint", style: { fontWeight: 400 } }, `+${fmt.ms(r.start)}`)),
         h("div", { class: "p" }, r.purpose.label),
+        mixed ? h("div", { class: "m" }, modelInfo(r.model).name) : null,
         h("div", { class: "x" }, r.status >= 400 ? `HTTP ${r.status}` : `${r.stopReason ?? r.stop ?? "-"} · ${t ? fmt.k(promptTokens(t)) + " in" : "-"}`)));
     }
   }
@@ -476,6 +480,7 @@ const PARAM_NOTES = {
   conversationId: "Cursor's id for the conversation. Its server keeps the conversation under this id, which is why the CLI never re-sends it.",
   runId: "One run per prompt: the agent loop that answers it, on Cursor's servers.",
   contextWindow: "How full the model's context window was for this call, as Cursor reports it.",
+  requestedModel: "The model the CLI asked for. The server answers with the exact variant it served (effort, speed), which is the model above.",
   rebuiltFrom: "The captured run stream this call was rebuilt from. See Raw JSON.",
 };
 

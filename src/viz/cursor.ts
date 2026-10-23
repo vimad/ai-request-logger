@@ -643,6 +643,8 @@ function buildTurn({ store, sessionDir, turnDir }: TurnInput): { requests: VizRe
     const usage = step.usage;
     const params: Record<string, unknown> = {
       model: step.model ?? main.model,
+      // What the CLI asked for, when the server names the variant it served differently.
+      requestedModel: step.model && main.model && step.model !== main.model ? main.model : undefined,
       conversationId: main.conversationId,
       runId: main.runId,
     };
@@ -714,14 +716,16 @@ function buildTurn({ store, sessionDir, turnDir }: TurnInput): { requests: VizRe
   return { requests, notes, warnings };
 }
 
-function listTurns(sessionDir: string): Map<string, { requests: number; durationMs: number; tokens: number }> {
-  const out = new Map<string, { requests: number; durationMs: number; tokens: number }>();
+function listTurns(sessionDir: string): Map<string, { requests: number; durationMs: number; tokens: number; models: string[] }> {
+  const out = new Map<string, { requests: number; durationMs: number; tokens: number; models: string[] }>();
   for (const step of readSession(sessionDir).steps) {
     if (!step.turnDir) continue;
-    const c = out.get(step.turnDir) ?? { requests: 0, durationMs: 0, tokens: 0 };
+    const c = out.get(step.turnDir) ?? { requests: 0, durationMs: 0, tokens: 0, models: [] };
     c.requests++;
     c.durationMs += step.endAt - step.startAt;
     c.tokens += tokens(step.usage).total;
+    const model = step.model ?? step.source.req?.shape?.model;
+    if (typeof model === "string" && !c.models.includes(model)) c.models.push(model);
     out.set(step.turnDir, c);
   }
   return out;

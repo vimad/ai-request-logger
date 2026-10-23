@@ -206,6 +206,8 @@ export interface TurnListing {
   background: number;
   durationMs: number;
   tokens: number;
+  /** Every model that answered in this turn, agent-loop models first. Empty when none was recorded. */
+  models: string[];
 }
 
 export interface SessionListing {
@@ -250,7 +252,7 @@ export interface VizAdapter {
    */
   turn?(input: TurnInput): { requests: VizRequest[]; notes: string[]; warnings: string[] };
   /** The home page's per-turn counts, for an adapter that has `turn`. */
-  listTurns?(sessionDir: string): Map<string, { requests: number; durationMs: number; tokens: number }>;
+  listTurns?(sessionDir: string): Map<string, { requests: number; durationMs: number; tokens: number; models: string[] }>;
 }
 
 export interface TurnInput {

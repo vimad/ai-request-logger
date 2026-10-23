@@ -52,6 +52,53 @@ export function esc(text) {
   return String(text ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
 
+/* -------------------------------------------------------------- models */
+
+// Effort and speed suffixes a harness appends to a model id
+// (`cursor-grok-4.6-high-fast`): shown as tags, not as part of the name.
+const MODEL_TAGS = new Set(["minimal", "low", "medium", "high", "xhigh", "max", "fast", "thinking", "preview", "latest"]);
+const MODEL_VENDORS = [
+  [/^claude/, "anthropic", "Anthropic"],
+  [/^(gpt|chatgpt|codex|o\d)/, "openai", "OpenAI"],
+  [/^grok/, "xai", "xAI"],
+  [/^gemini/, "google", "Google"],
+  [/^(composer|cursor)/, "cursor", "Cursor"],
+];
+
+/**
+ * A model id as a person would say it: `claude-opus-5-5` is Claude Opus 5.5,
+ * `gpt-5.6-terra` is GPT-5.6 Terra, `cursor-grok-4.6-high-fast` is Grok 4.6
+ * with the tags high and fast. An id it cannot read comes back as itself.
+ */
+export function modelInfo(id) {
+  const raw = String(id ?? "");
+  const bare = raw.toLowerCase()
+    .replace(/^cursor[-/](?=.+-)/, "")
+    .replace(/^[a-z]+\//, "")
+    .replace(/-(\d{8}|\d{4}-\d{2}-\d{2})$/, "");
+  const [, vendor = "other", vendorName = ""] = MODEL_VENDORS.find(([re]) => re.test(bare)) ?? [];
+  const parts = bare.split("-").filter(Boolean);
+  const tags = [];
+  while (parts.length > 1 && MODEL_TAGS.has(parts.at(-1))) tags.unshift(parts.pop());
+  // Runs of bare numbers are one version: claude-opus-5-5 is 5.5.
+  const words = [];
+  for (const p of parts) {
+    if (/^\d+$/.test(p) && /^\d+(\.\d+)*$/.test(words.at(-1) ?? "")) words[words.length - 1] += `.${p}`;
+    else words.push(p);
+  }
+  const name = words.map((w, i) =>
+    w === "gpt" ? "GPT" : /\d/.test(w) ? w : i === 0 && /^o\d/.test(w) ? w : w[0].toUpperCase() + w.slice(1),
+  ).join(" ").replace(/^GPT (?=\d)/, "GPT-");
+  return { raw, name: name || raw, tags, vendor, vendorName };
+}
+
+/** A model as a chip coloured by who makes it; the exact id is in the tooltip. */
+export function modelChip(id, ...extra) {
+  const m = modelInfo(id);
+  return h("span", { class: `chip model-chip vendor-${m.vendor}`, title: `${m.raw}${m.vendorName ? ` · ${m.vendorName}` : ""}` },
+    h("i", { class: "dot" }), m.name, m.tags.map((t) => h("span", { class: "tag" }, t)), extra);
+}
+
 /* ------------------------------------------------------------- numbers */
 
 export const fmt = {

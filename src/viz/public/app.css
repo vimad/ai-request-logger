@@ -33,6 +33,11 @@
   --h-claude: #e8916b;
   --h-codex: #60a5fa;
   --h-cursor: #c4b5fd;
+  --v-anthropic: #e8916b;
+  --v-openai: #34d399;
+  --v-xai: #cbd5e1;
+  --v-google: #60a5fa;
+  --v-cursor: #c4b5fd;
 
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   --sans: ui-sans-serif, -apple-system, "Segoe UI", Inter, Roboto, "Helvetica Neue", sans-serif;
@@ -72,6 +77,11 @@
   --h-claude: #c2410c;
   --h-codex: #1d4ed8;
   --h-cursor: #6d28d9;
+  --v-anthropic: #c2410c;
+  --v-openai: #047857;
+  --v-xai: #334155;
+  --v-google: #1d4ed8;
+  --v-cursor: #6d28d9;
   color-scheme: light;
 }
 
@@ -164,6 +174,20 @@ main { max-width: 1480px; margin: 0 auto; padding: 22px 22px 120px; }
 .harness-cursor { --c: var(--h-cursor); }
 .harness-unknown { --c: var(--c-other); }
 .badge-echo { --c: var(--c-assistant); }
+
+/* A model, coloured by who makes it (not by the harness that called it). */
+.model-chip { --c: var(--c-other); font-family: var(--mono); font-weight: 600; cursor: help; }
+.model-chip .dot { width: 7px; height: 7px; border-radius: 50%; }
+.model-chip .tag { font-size: 10.5px; font-weight: 500; padding: 0 6px; border-radius: 999px; background: color-mix(in srgb, var(--c) 22%, transparent); }
+.model-chip .count { font-family: var(--sans); font-weight: 400; color: var(--muted); }
+.vendor-anthropic { --c: var(--v-anthropic); }
+.vendor-openai { --c: var(--v-openai); }
+.vendor-xai { --c: var(--v-xai); }
+.vendor-google { --c: var(--v-google); }
+.vendor-cursor { --c: var(--v-cursor); }
+.models { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; font-size: 12px; }
+.prompt-card .models .label { margin-right: 2px; }
+.turn-card .models { margin-top: 10px; }
 .badge-carried { --c: var(--faint); }
 
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); }
@@ -383,6 +407,7 @@ main { max-width: 1480px; margin: 0 auto; padding: 22px 22px 120px; }
 .film.sel { box-shadow: var(--glow); border-color: var(--accent); }
 .film .k { font: 700 13px var(--sans); }
 .film .p { font-size: 11.5px; color: var(--muted); }
+.film .m { font: 11px var(--mono); color: var(--muted); }
 .film .x { font: 11px var(--mono); color: var(--faint); margin-top: 3px; }
 .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); padding: 0 12px; overflow-x: auto; }
 .tab { padding: 11px 14px; border: 0; background: none; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; font-weight: 600; white-space: nowrap; }

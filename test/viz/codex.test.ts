@@ -72,6 +72,7 @@ describe("viz digest: a Codex turn becomes the same model", () => {
     assert.equal(s.turns[0]!.main, 2);
     assert.equal(s.turns[0]!.background, 2);
     assert.ok(s.turns[0]!.tokens > 0);
+    assert.deepEqual(s.turns[0]!.models, ["gpt-5.6-terra"]);
     assert.equal(turn.harness.name, "Codex CLI");
     assert.deepEqual(turn.warnings, []);
   });

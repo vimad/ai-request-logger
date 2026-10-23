@@ -71,6 +71,7 @@ describe("viz digest: a captured turn becomes the visualizer's model", () => {
     assert.equal(s.turns.length, 1);
     assert.equal(s.turns[0]!.main, 2);
     assert.equal(s.turns[0]!.background, 1);
+    assert.deepEqual(s.turns[0]!.models, ["claude-opus-5"]);
   });
 
   it("pulls in the pre-turn background call and orders everything by time", () => {

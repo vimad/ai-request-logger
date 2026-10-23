@@ -224,5 +224,12 @@ describe("viz digest: a Cursor session is rebuilt into model calls", () => {
     assert.equal(s.supported, true);
     assert.equal(s.harness, "Cursor");
     assert.deepEqual(s.turns.map((t) => [t.requests, t.main, t.background]), [[3, 3, 0], [2, 2, 0]]);
+    assert.deepEqual(s.turns.map((t) => t.models), [["cursor-test-model"], ["cursor-test-model"]]);
+  });
+
+  it("names the model that served each call, and the one the CLI asked for", () => {
+    const t1 = digestTurn(root, SESSION, "turn-001__fix-the-bug");
+    assert.deepEqual(t1.requests.map((r) => r.model), ["cursor-test-model", "cursor-test-model", "cursor-test-model"]);
+    assert.equal(t1.requests[0]!.params.requestedModel, "test-model");
   });
 });

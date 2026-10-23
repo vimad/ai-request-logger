@@ -2,7 +2,7 @@
 // with a live view of what the current request carries and a real-time Gantt.
 
 import {
-  CATS, catVar, chip, clear, esc, fmt, groupsOf, h, isBackground, promptTokens, purposeColor, s, store,
+  CATS, catVar, chip, clear, esc, fmt, groupsOf, h, isBackground, modelInfo, promptTokens, purposeColor, s, store,
 } from "./util.js";
 import { openBlob } from "./drawer.js";
 
@@ -402,7 +402,8 @@ export function theater(ctx) {
     st.readFresh.setAttribute("width", 0);
     st.readFresh.setAttribute("x", 790);
     st.readText.textContent = "";
-    st.modelName.textContent = (r?.model ?? turn.requests.find(isMain)?.model ?? "");
+    const shown = modelInfo(r?.model ?? turn.requests.find(isMain)?.model ?? "");
+    st.modelName.textContent = [shown.name, ...shown.tags].join(" · ");
 
     const mainNow = step.type === "bg" ? lastMainBefore(k) : r;
     drawTower(mainNow && isMain(mainNow) ? mainNow : lastMainBefore(k), false);
