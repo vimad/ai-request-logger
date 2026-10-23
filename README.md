@@ -31,17 +31,21 @@ Node **22.18+** (24.x recommended). Nothing else.
 ## Run it
 
 ```bash
-node src/index.ts          # or: npm start
-npm run start:cursor       # ... for the Cursor CLI (`agent`)
-npm run start:codex        # ... for the Codex CLI (`codex`)
+npm start                  # or: node src/index.ts  (npm run dev: same, --watch)
 ```
 
-It prints the exact command to point that client at it. For the default
-(Claude Code), the short version:
+One command starts a proxy for every supported client, all logging into one
+tree, plus [Agent X-Ray](#see-it-agent-x-ray) to look at what they capture:
 
-```bash
-ANTHROPIC_BASE_URL=http://127.0.0.1:8787 claude
-```
+| Client | Proxy | Point it at the proxy |
+| --- | --- | --- |
+| Claude Code | `:8787` | `ANTHROPIC_BASE_URL=http://127.0.0.1:8787 claude` |
+| Cursor CLI | `:8788` | `CURSOR_API_ENDPOINT=http://127.0.0.1:8788 agent` |
+| Codex CLI | `:8789` | the `codex -c …` line in the banner |
+| Agent X-Ray | `:8790` | open http://127.0.0.1:8790 |
+
+The banner prints the exact commands, and the X-Ray home page has a
+**Connect a coding agent** panel with a tab per client and copy buttons.
 
 To stop logging, drop the env var. Nothing about your install changes. Codex
 has no such env var — it needs a `-c` config override instead, which the
@@ -51,10 +55,11 @@ banner prints for you; see [docs/codex.md](./docs/codex.md).
 
 | Flag | Env | Default |
 | --- | --- | --- |
-| `--provider` | `LOGGER_PROVIDER` | `claude` (also: `cursor`, `codex`) |
-| `--port` | `LOGGER_PORT` | `8787` |
+| `--provider` | `LOGGER_PROVIDER` | all of them; or a comma list, e.g. `claude,codex` |
+| `--port` | `LOGGER_PORT` | `8787`, the base: claude `+0`, cursor `+1`, codex `+2` |
+| `--viz-port` | `VIZ_PORT` | `8790` |
 | `--host` | `LOGGER_HOST` | `127.0.0.1` |
-| `--upstream` | `LOGGER_UPSTREAM` | the provider's default (`https://api.anthropic.com`) |
+| `--upstream` | `LOGGER_UPSTREAM` | each provider's default; needs a single `--provider` |
 | `--log-dir` | `LOGGER_LOG_DIR` | `log` |
 | `--redact=false` | `LOGGER_REDACT=0` | redaction on |
 | `--raw-sse=true` | `LOGGER_RAW_SSE=1` | off |
@@ -65,9 +70,7 @@ instead.
 
 ## See it: Agent X-Ray
 
-```bash
-npm run viz                # http://127.0.0.1:8790
-```
+Started by `npm start`, at http://127.0.0.1:8790.
 
 This is an animated, clickable replay of any captured Claude Code turn, made for
 explaining how a coding agent works. You can watch the loop lap by lap and see

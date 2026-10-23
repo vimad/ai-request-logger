@@ -5,24 +5,24 @@ coding agent works**. It reads the log tree and nothing else, never writes to
 it, and has no dependencies or build step.
 
 ```bash
-npm start                                      # terminal 1: the proxy
+npm start                                      # terminal 1: every proxy + http://127.0.0.1:8790
 ANTHROPIC_BASE_URL=http://127.0.0.1:8787 claude # terminal 2: do a task
-npm run viz                                    # terminal 3: http://127.0.0.1:8790
 ```
 
-| Flag | Env | Default |
-| --- | --- | --- |
-| `--log-dir` | `LOGGER_LOG_DIR` | `log` |
-| `--port` | `VIZ_PORT` | `8790` |
-| `--host` | | `127.0.0.1` |
+`npm start` runs it next to the proxies, reading the same `--log-dir`; move it
+with `--viz-port` / `VIZ_PORT` (default `8790`). The launcher hands it the
+running proxies, which the home page shows as a collapsible **Connect a coding
+agent** panel (`/api/connect`, built by `core/connect.ts`, the same data the
+terminal banner prints): one tab per harness with its setup note and
+copy-paste commands. It opens on its own while nothing has been captured.
 
 The home page polls the log directory, so turns show up as you capture them.
 A turn page that is still growing offers a reload instead of rebuilding under
 you mid-explanation.
 
 **Claude Code, the Codex CLI and the Cursor CLI.** Capture Codex traffic with
-`npm run start:codex` and the `codex -c …` line it prints, and Cursor with
-`npm run start:cursor` and `agent --endpoint http://127.0.0.1:8787`. The page
+the `codex -c …` line the banner prints (proxy on `:8789`), and Cursor with
+`agent --endpoint http://127.0.0.1:8788`. The page
 is the same, worded for each harness. For Cursor it is rebuilt rather than
 read off the wire (see [Cursor](#cursor) below).
 

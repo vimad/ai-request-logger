@@ -12,7 +12,7 @@ import { encodeBody } from "./bytes.ts";
 import type { Config } from "./config.ts";
 import { renderIndex, renderSession, renderTurn } from "./render.ts";
 import type { SseEvent } from "./sse.ts";
-import type { RequestShape, ResponseFacts, TurnRequestSummary } from "./types.ts";
+import type { IndexRow, RequestShape, ResponseFacts, TurnRequestSummary } from "./types.ts";
 import { jsonStringify, nowIso, pad, sha1, slug, stamp } from "./util.ts";
 
 const SECRET_HEADERS = new Set([
@@ -64,12 +64,32 @@ export interface RequestMeta {
   shape?: RequestShape;
 }
 
+/**
+ * Every store writing into one log directory, so `index.md` lists all of
+ * their sessions. Proxies for several providers can share one directory;
+ * without this each would overwrite `index.md` with only its own sessions.
+ */
+export class SharedIndex {
+  #sources = new Set<() => IndexRow[]>();
+
+  add(rows: () => IndexRow[]): void {
+    this.#sources.add(rows);
+  }
+
+  rows(): IndexRow[] {
+    return [...this.#sources].flatMap((rows) => rows());
+  }
+}
+
 export class LogStore {
   #cfg: Config;
   #sessions = new Map<string, SessionState>();
+  #index: SharedIndex;
 
-  constructor(cfg: Config) {
+  constructor(cfg: Config, index = new SharedIndex()) {
     this.#cfg = cfg;
+    this.#index = index;
+    index.add(() => this.#indexRows());
     mkdirSync(cfg.logDir, { recursive: true });
   }
 
@@ -244,8 +264,12 @@ export class LogStore {
   }
 
   #renderIndex(): string {
+    return renderIndex(this.#index.rows(), this.#cfg.logDir);
+  }
+
+  #indexRows(): IndexRow[] {
     const { renderer } = this.#cfg.provider;
-    const rows = [...this.#sessions.values()].map((s) => {
+    return [...this.#sessions.values()].map((s) => {
       const reqs = s.turns.flatMap((t) => t.requests);
       return {
         dir: basename(s.dir),
@@ -255,7 +279,6 @@ export class LogStore {
         tokens: reqs.reduce((n, r) => n + renderer.tokens(r.usage).total, 0),
       };
     });
-    return renderIndex(rows, this.#cfg.logDir);
   }
 
   async appendIndex(line: unknown): Promise<void> {

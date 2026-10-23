@@ -10,7 +10,7 @@
  * named provider instead, on every invocation:
  *
  *     codex -c model_providers.local.name="local" \
- *           -c model_providers.local.base_url="http://127.0.0.1:8787" \
+ *           -c model_providers.local.base_url="http://127.0.0.1:8789" \
  *           -c model_providers.local.wire_api="responses" \
  *           -c model_provider="local"
  *

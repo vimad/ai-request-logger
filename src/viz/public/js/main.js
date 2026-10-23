@@ -1,5 +1,6 @@
 // Routing, the home page, the hero, and wiring the three sections together.
 
+import { connectPanel } from "./connect.js";
 import { closeDrawer } from "./drawer.js";
 import { inspector } from "./inspector.js";
 import { matrix } from "./matrix.js";
@@ -107,7 +108,7 @@ async function homePage() {
       list.append(h("div", { class: "panel empty" },
         h("h3", null, "No turns captured yet"),
         h("p", null, "Reading ", h("code", null, data.logDir)),
-        h("p", null, "Start the proxy with ", h("code", null, "npm start"), " and run ", h("code", null, "ANTHROPIC_BASE_URL=http://127.0.0.1:8787 claude"), ", or ", h("code", null, "npm run start:codex"), " and run the ", h("code", null, "codex -c …"), " line it prints, or ", h("code", null, "npm run start:cursor"), " and ", h("code", null, "agent --endpoint http://127.0.0.1:8787"), ". Ask it something, and it will appear here on its own.")));
+        h("p", null, "Open ", h("b", null, "Connect a coding agent"), " above, run the command for your harness, and ask it something. The turn will appear here on its own.")));
       return;
     }
     for (const sess of data.sessions) {
@@ -135,16 +136,25 @@ async function homePage() {
     }
   };
 
+  let proxies = [];
+  try {
+    proxies = (await getJson("/api/connect")).proxies;
+  } catch {}
+  const connect = connectPanel(proxies);
+
   clear(app).append(
     h("div", { class: "intro" },
       h("div", null,
         h("h1", null, "What really happens when you ", h("em", null, "press Enter")),
         h("p", null, "Agent X-Ray replays a real Claude Code, Codex CLI or Cursor CLI turn from the proxy's logs. It shows the loop, the hidden system prompt, the tools, the context the harness injects, and the background calls you never see. It's built for explaining how a coding agent works."),
         h("p", { class: "how muted" },
-          "1. ", h("code", null, "npm start"), "  2. ", h("code", null, "ANTHROPIC_BASE_URL=http://127.0.0.1:8787 claude"), "  (or ", h("code", null, "npm run start:codex"), " and the ", h("code", null, "codex -c …"), " line it prints, or ", h("code", null, "npm run start:cursor"), " and ", h("code", null, "agent --endpoint http://127.0.0.1:8787"), ")  3. ask it something, then pick the turn below.")),
+          "1. ", h("code", null, "npm start"), " runs a proxy for every harness  2. point your agent at its proxy (see ", h("b", null, "Connect a coding agent"), " below)  3. ask it something, then pick the turn.")),
       introArt()),
+    ...(connect ? [connect] : []),
     list);
   await load();
+  // Nothing captured yet: the setup is the only useful thing on the page.
+  if (connect && !list.querySelector(".session")) connect.open = true;
   poll = setInterval(load, 4000);
 }
 

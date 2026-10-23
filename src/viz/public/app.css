@@ -190,6 +190,23 @@ main { max-width: 1480px; margin: 0 auto; padding: 22px 22px 120px; }
 .intro .how { font-size: 13px; }
 .intro .how code { background: var(--panel-2); padding: 2px 6px; border-radius: 6px; border: 1px solid var(--line); }
 .intro-art { width: 100%; height: auto; }
+
+.connect { padding: 0; margin: 10px 0 22px; overflow: hidden; }
+.connect > summary { cursor: pointer; padding: 14px 18px; font-weight: 700; list-style: none; display: flex; align-items: baseline; gap: 4px; }
+.connect > summary::-webkit-details-marker { display: none; }
+.connect > summary::before { content: "▸"; color: var(--muted); margin-right: 8px; transition: transform 0.15s; display: inline-block; }
+.connect[open] > summary::before { transform: rotate(90deg); }
+.connect > summary .muted { font-weight: 400; font-size: 13px; }
+.connect .tab .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--c); margin-right: 8px; }
+.connect-body { padding: 16px 20px 18px; }
+.connect-route { margin: 0 0 14px; font-size: 14px; color: var(--muted); }
+.connect-route code, .connect-foot code { background: var(--panel-2); padding: 2px 6px; border-radius: 6px; border: 1px solid var(--line); }
+.connect-step { margin-bottom: 14px; }
+.connect-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 6px; }
+.connect-cmd { display: flex; gap: 10px; align-items: flex-start; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.connect-cmd pre { flex: 1; margin: 0; font: 13px/1.55 var(--mono); white-space: pre-wrap; word-break: break-all; color: var(--c-assistant); }
+.connect-cmd .copy { flex: none; font-size: 12px; padding: 4px 10px; }
+.connect-foot { font-size: 13px; margin: 6px 0 0; }
 .sessions { display: grid; gap: 18px; margin-top: 26px; }
 .session { padding: 16px 18px; }
 .session-head { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; margin-bottom: 10px; }

@@ -4,8 +4,8 @@
  * Point the CLI at the proxy with its own endpoint flag - there is no base-URL
  * environment variable that the client reads on its own:
  *
- *     agent --endpoint http://127.0.0.1:8787
- *     CURSOR_API_ENDPOINT=http://127.0.0.1:8787 agent
+ *     agent --endpoint http://127.0.0.1:8788
+ *     CURSOR_API_ENDPOINT=http://127.0.0.1:8788 agent
  *
  * The agent stream is HTTP/2 by default, which a plain HTTP/1.1 reverse proxy
  * cannot carry. Set `network.useHttp1ForAgent: true` in `~/.cursor/cli-config.json`

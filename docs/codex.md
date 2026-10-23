@@ -10,15 +10,14 @@ several ways that matter.
 ## Running it
 
 ```bash
-npm run start:codex                          # or: npm run dev:codex
+npm start                                    # the Codex proxy is on :8789
 codex -c model_providers.local.name="local" \
-      -c model_providers.local.base_url="http://127.0.0.1:8787" \
+      -c model_providers.local.base_url="http://127.0.0.1:8789" \
       -c model_providers.local.wire_api="responses" \
       -c model_provider="local"
 ```
 
-`npm start -- --provider codex` and `LOGGER_PROVIDER=codex npm start` do the
-same thing; the script is just the short form.
+`npm start -- --provider codex` runs the Codex proxy alone (still on `:8789`).
 
 **There is no base-URL environment variable.** Codex refuses outright to let
 you repoint its built-in `openai` provider:

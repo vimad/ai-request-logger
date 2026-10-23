@@ -1,11 +1,9 @@
-#!/usr/bin/env node
 /**
  * Agent X-Ray: an animated, clickable view of a captured turn.
  *
- *   node src/viz/server.ts [--log-dir log] [--port 8790] [--host 127.0.0.1]
- *
- * Serves a static single-page app from `public/` and a small JSON API that
- * digests the log tree on demand. Read-only: nothing here ever writes to the
+ * Started by `npm start` (src/index.ts) next to the proxies. Serves a static
+ * single-page app from `public/` and a small JSON API that digests the log
+ * tree on demand. Read-only: nothing here ever writes to the
  * log directory. It re-reads the tree on every request, so turns captured
  * while it runs show up without a restart.
  */
@@ -13,6 +11,7 @@ import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { extname, join, resolve, sep } from "node:path";
 import { gzipSync } from "node:zlib";
+import type { ConnectInfo } from "../core/connect.ts";
 import { digestTurn, listSessions } from "./digest.ts";
 
 const PUBLIC = resolve(import.meta.dirname, "public");
@@ -60,7 +59,12 @@ function sendFile(res: ServerResponse, path: string, type?: string): void {
   createReadStream(path).pipe(res);
 }
 
-export function createVizServer(logDir: string) {
+export interface VizOptions {
+  /** The proxies running alongside, for the "connect a harness" panel. */
+  connect?: ConnectInfo[];
+}
+
+export function createVizServer(logDir: string, opts: VizOptions = {}) {
   const root = resolve(logDir);
 
   return createServer((req, res) => {
@@ -68,6 +72,11 @@ export function createVizServer(logDir: string) {
     try {
       if (url.pathname === "/api/sessions") {
         sendJson(req, res, 200, { logDir: root, sessions: listSessions(root) });
+        return;
+      }
+
+      if (url.pathname === "/api/connect") {
+        sendJson(req, res, 200, { proxies: opts.connect ?? [] });
         return;
       }
 
@@ -106,36 +115,5 @@ export function createVizServer(logDir: string) {
     } catch (err) {
       sendJson(req, res, 500, { error: (err as Error).message });
     }
-  });
-}
-
-function flag(argv: string[], name: string): string | undefined {
-  const i = argv.findIndex((a) => a === `--${name}` || a.startsWith(`--${name}=`));
-  if (i < 0) return undefined;
-  const a = argv[i]!;
-  return a.includes("=") ? a.slice(a.indexOf("=") + 1) : argv[i + 1];
-}
-
-if (import.meta.filename === process.argv[1]) {
-  const argv = process.argv.slice(2);
-  const logDir = resolve(flag(argv, "log-dir") ?? process.env.LOGGER_LOG_DIR ?? "log");
-  const port = Number(flag(argv, "port") ?? process.env.VIZ_PORT ?? 8790);
-  const host = flag(argv, "host") ?? "127.0.0.1";
-  const server = createVizServer(logDir);
-  server.on("error", (err: NodeJS.ErrnoException) => {
-    if (err.code === "EADDRINUSE") {
-      console.error(`\n  Port ${port} is already in use. Try: npm run viz -- --port ${port + 1}\n`);
-      process.exit(1);
-    }
-    throw err;
-  });
-  server.listen(port, host, () => {
-    console.log("");
-    console.log(`  Agent X-Ray  ·  http://${host}:${port}`);
-    console.log(`  reading      ${logDir}`);
-    console.log("");
-    console.log("  Capture a turn with `npm start` + Claude Code, `npm run start:codex` + Codex,");
-    console.log("  or `npm run start:cursor` + the Cursor CLI, then pick it in the browser.");
-    console.log("");
   });
 }

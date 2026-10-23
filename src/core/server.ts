@@ -1,6 +1,6 @@
 import { createServer, type Server } from "node:http";
 import type { Config } from "./config.ts";
-import { LogStore } from "./logger.ts";
+import { LogStore, SharedIndex } from "./logger.ts";
 import { createHandler } from "./proxy.ts";
 
 export interface ProxyServer {
@@ -12,8 +12,12 @@ export interface ProxyServer {
  * Builds the proxy server without starting it. Kept separate from the CLI so
  * tests can drive a real server on an ephemeral port.
  */
-export function createProxyServer(cfg: Config, onLine: (line: string) => void = () => {}): ProxyServer {
-  const store = new LogStore(cfg);
+export function createProxyServer(
+  cfg: Config,
+  onLine: (line: string) => void = () => {},
+  index: SharedIndex = new SharedIndex(),
+): ProxyServer {
+  const store = new LogStore(cfg, index);
   const server = createServer(createHandler({ cfg, store, onLine }));
 
   // Agent clients hold long-lived streaming requests open while the model

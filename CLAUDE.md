@@ -5,14 +5,12 @@ a **session → turn → provider request** tree. No build step; runs on Node's
 built-in TypeScript support. Node 22.18+.
 
 ```bash
-npm start                # run the proxy for Claude Code
-npm run start:cursor     # ... for the Cursor CLI (`agent`)
-npm run start:codex      # ... for the Codex CLI (`codex`)
-npm run dev              # same, with --watch (dev:cursor, dev:codex too)
+npm start                # every proxy + Agent X-Ray, in one process:
+                         #   claude :8787, cursor :8788, codex :8789, viz :8790
+npm run dev              # same, with --watch
 npm test                 # node --test, ~1s, no network
 npx tsc --noEmit         # typecheck src/ and test/
 npm run report           # re-render a captured log tree
-npm run viz              # Agent X-Ray: animated turn replay at :8790
 ```
 
 ## Architecture in one line
@@ -67,7 +65,7 @@ it in `src/providers.ts`, mirror the tests under `test/<name>/`.
 
 ## Using the Cursor provider
 
-`agent --endpoint http://127.0.0.1:8787` (or `CURSOR_API_ENDPOINT`). It also
+`agent --endpoint http://127.0.0.1:8788` (or `CURSOR_API_ENDPOINT`). It also
 needs `{"network": {"useHttp1ForAgent": true}}` in `~/.cursor/cli-config.json` —
 on HTTP/2 the CLI bypasses the proxy silently and the log stays empty.
 
@@ -79,7 +77,7 @@ invocation (the banner prints this exact line):
 
 ```bash
 codex -c model_providers.local.name="local" \
-      -c model_providers.local.base_url="http://127.0.0.1:8787" \
+      -c model_providers.local.base_url="http://127.0.0.1:8789" \
       -c model_providers.local.wire_api="responses" \
       -c model_provider="local"
 ```

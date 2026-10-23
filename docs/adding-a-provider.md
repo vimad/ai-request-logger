@@ -16,7 +16,7 @@ Run the proxy with **no provider written yet**. Unrecognised traffic is still
 captured verbatim:
 
 ```bash
-node src/index.ts --upstream https://api2.cursor.sh --log-dir /tmp/cursor-capture
+node src/index.ts --provider claude --upstream https://api2.cursor.sh --log-dir /tmp/cursor-capture
 CURSOR_API_ENDPOINT=http://127.0.0.1:8787 agent
 ```
 

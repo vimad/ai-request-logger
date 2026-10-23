@@ -8,12 +8,11 @@ captured through this proxy.
 ## Running it
 
 ```bash
-npm run start:cursor                          # or: npm run dev:cursor
-CURSOR_API_ENDPOINT=http://127.0.0.1:8787 agent
+npm start                                     # the Cursor proxy is on :8788
+CURSOR_API_ENDPOINT=http://127.0.0.1:8788 agent
 ```
 
-`npm start -- --provider cursor` and `LOGGER_PROVIDER=cursor npm start` do the
-same thing; the script is just the short form.
+`npm start -- --provider cursor` runs the Cursor proxy alone (still on `:8788`).
 
 **You must put the CLI on HTTP/1.1 first.** Add this to
 `~/.cursor/cli-config.json`:
@@ -27,7 +26,7 @@ carry. With the default left in place the CLI still *works* — it just never
 reaches the proxy, and the log directory stays empty. That silence is the
 symptom to recognise.
 
-`--endpoint http://127.0.0.1:8787` on the command line does the same job as the
+`--endpoint http://127.0.0.1:8788` on the command line does the same job as the
 environment variable. There is no other base-URL override: the flag and the
 variable are the whole of it.
 
