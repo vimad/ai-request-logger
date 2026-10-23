@@ -79,10 +79,13 @@ invocation (the banner prints this exact line):
 codex -c model_providers.local.name="local" \
       -c model_providers.local.base_url="http://127.0.0.1:8789" \
       -c model_providers.local.wire_api="responses" \
+      -c model_providers.local.requires_openai_auth=true \
       -c model_provider="local"
 ```
 
-Existing `codex login` (ChatGPT) or API key auth keeps working unchanged.
+`requires_openai_auth=true` makes Codex attach your existing `codex login`
+(ChatGPT) or API key credentials; without it the custom provider sends no
+`Authorization` header and every request gets a 401.
 
 ## Notes
 

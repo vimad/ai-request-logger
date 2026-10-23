@@ -14,6 +14,7 @@ npm start                                    # the Codex proxy is on :8789
 codex -c model_providers.local.name="local" \
       -c model_providers.local.base_url="http://127.0.0.1:8789" \
       -c model_providers.local.wire_api="responses" \
+      -c model_providers.local.requires_openai_auth=true \
       -c model_provider="local"
 ```
 
@@ -28,12 +29,17 @@ provider IDs: `openai`. Built-in providers cannot be overridden.
 ```
 
 So the only way in is to define a *new* named provider and select it, on every
-invocation, with the three `-c` overrides above. `Provider.baseUrlEnvVar` has
+invocation, with the `-c` overrides above. `Provider.baseUrlEnvVar` has
 nothing truthful to hold in this case, so `banner.invocation` (a `BannerNotes`
 field added for this provider) replaces the whole `$ENV=url client` line the
-banner would otherwise print. Whatever auth mode is already active — ChatGPT
-login (`codex login`) or an API key — is picked up by the new provider entry
-automatically; nothing about auth changes.
+banner would otherwise print.
+
+**`requires_openai_auth=true` is not optional.** It is what tells Codex to
+attach whatever auth mode is already active — ChatGPT login (`codex login`) or
+an API key — to the new provider. Without it, a custom provider is treated as
+unauthenticated: requests go out with no `Authorization` header and the
+backend answers `401 {"detail":"Unauthorized"}`. (Older Codex releases sent the
+credential anyway; 0.163.0 does not.)
 
 ## The one endpoint that matters
 

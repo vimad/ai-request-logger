@@ -12,10 +12,13 @@
  *     codex -c model_providers.local.name="local" \
  *           -c model_providers.local.base_url="http://127.0.0.1:8789" \
  *           -c model_providers.local.wire_api="responses" \
+ *           -c model_providers.local.requires_openai_auth=true \
  *           -c model_provider="local"
  *
- * Existing `codex login` (ChatGPT OAuth) or an API key auth mode is honoured
- * automatically by the new provider entry - nothing else changes.
+ * `requires_openai_auth=true` is what makes Codex attach your existing
+ * `codex login` (ChatGPT OAuth) or API key credentials to the new provider;
+ * without it a custom provider sends no `Authorization` header and the
+ * backend answers 401.
  */
 import type { DescribeInput, Provider, RequestShape, StreamFraming } from "../core/types.ts";
 import { reconstructMessage, responseFacts } from "./messages.ts";
@@ -27,7 +30,8 @@ const RESPONSES_PATH = /\/responses(?:\?|$)/;
 
 const INVOCATION =
   'codex -c model_providers.local.name="local" -c model_providers.local.base_url="{base}" ' +
-  '-c model_providers.local.wire_api="responses" -c model_provider="local"';
+  '-c model_providers.local.wire_api="responses" -c model_providers.local.requires_openai_auth=true ' +
+  '-c model_provider="local"';
 
 export const codex: Provider = {
   id: "codex",
