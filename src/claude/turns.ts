@@ -42,7 +42,12 @@ const SYSTEM_REMINDER = /<system-reminder>[\s\S]*?<\/system-reminder>/g;
  * Being wrong here is cheap: the request is still logged, just folded into the
  * turn in flight instead of opening one of its own.
  */
-const SYNTHETIC_PROMPTS = [/^\[SUGGESTION MODE:/i, /^\[No response requested/i];
+const SYNTHETIC_PROMPTS = [
+  /^\[SUGGESTION MODE:/i,
+  /^\[No response requested/i,
+  // The "while you were away" recap, sent when the user returns to an idle session.
+  /^The user stepped away and is coming back\. Recap/i,
+];
 
 function isSyntheticPrompt(text: string): boolean {
   const head = text.trimStart();

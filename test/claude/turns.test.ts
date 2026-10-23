@@ -134,6 +134,18 @@ describe("turn detection", () => {
     assert.equal(s.kind, "aux", "a prompt Claude Code writes to itself is not a user turn");
   });
 
+  it("classifies Claude Code's away-recap prompt as aux", () => {
+    const s = shape({
+      tools: TOOLS,
+      messages: [
+        { role: "user", content: "real question" },
+        { role: "assistant", content: [{ type: "text", text: "answer" }] },
+        { role: "user", content: "The user stepped away and is coming back. Recap in under 40 words, 1-2 plain sentences, no markdown." },
+      ],
+    });
+    assert.equal(s.kind, "aux", "the recap Claude Code asks for on return is not a user turn");
+  });
+
   it("reads the session id from the header, falling back to metadata", () => {
     const viaHeader = describeRequest({ messages: [] }, { "x-claude-code-session-id": "abc-123" }, true);
     assert.equal(viaHeader.sessionId, "abc-123");
