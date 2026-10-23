@@ -1,0 +1,12 @@
+{
+  "name": "ai-request-logger-demo",
+  "private": true,
+  "description": "Records the README demo video of Agent X-Ray with Playwright. Not part of the logger.",
+  "type": "module",
+  "scripts": {
+    "record": "node record.ts"
+  },
+  "devDependencies": {
+    "playwright": "^1.64.1"
+  }
+}

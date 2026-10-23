@@ -55,3 +55,8 @@ Desktop.ini
 tmp/
 temp/
 *.local
+
+# Demo video recorder (demo/): its captured log, dependencies and output.
+demo/log/
+demo/node_modules/
+demo/out/
