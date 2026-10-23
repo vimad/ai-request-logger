@@ -45,11 +45,38 @@ document.addEventListener("keydown", (e) => {
   page.onKey(e);
 });
 
-async function getJson(url) {
-  const res = await fetch(url);
+async function getJson(url, init) {
+  const res = await fetch(url, init);
   const body = await res.json();
   if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
   return body;
+}
+
+/** A modal yes/no. Resolves true only when the user confirms. */
+function confirmDialog({ title, body, confirm }) {
+  return new Promise((done) => {
+    const close = (ok) => {
+      overlay.remove();
+      done(ok);
+    };
+    const cancel = h("button", { class: "btn", onclick: () => close(false) }, "Cancel");
+    const overlay = h("div", {
+      class: "help confirm", role: "alertdialog", "aria-modal": "true",
+      onclick: (e) => { if (e.target === overlay) close(false); },
+      onkeydown: (e) => {
+        if (e.key === "Escape") close(false);
+        e.stopPropagation();
+      },
+    },
+      h("div", { class: "help-card" },
+        h("h3", null, title),
+        h("p", { class: "muted" }, body),
+        h("div", { class: "confirm-actions" },
+          cancel,
+          h("button", { class: "btn danger", onclick: () => close(true) }, confirm))));
+    document.body.append(overlay);
+    cancel.focus();
+  });
 }
 
 /* ---------------------------------------------------------------- router */
@@ -92,6 +119,24 @@ async function homePage() {
   crumbs.replaceChildren();
   const list = h("div", { class: "sessions" });
   let lastJson = "";
+  let logDir = "";
+  const deleteSession = async (sess) => {
+    const n = sess.turns.length;
+    const ok = await confirmDialog({
+      title: `Delete session ${sess.id.slice(0, 8)}?`,
+      body: [`This permanently removes ${logDir}/${sess.dir}`, n ? ` and its ${n} turn${n === 1 ? "" : "s"}` : "", ". It cannot be undone."].join(""),
+      confirm: "Delete session",
+    });
+    if (!ok) return;
+    try {
+      await getJson(`/api/session?session=${encodeURIComponent(sess.dir)}`, { method: "DELETE" });
+    } catch (err) {
+      list.prepend(h("div", { class: "warn" }, `Could not delete session ${sess.id.slice(0, 8)}: ${err.message}`));
+      return;
+    }
+    lastJson = "";
+    await load();
+  };
   const load = async () => {
     let data;
     try {
@@ -100,6 +145,7 @@ async function homePage() {
       clear(list).append(h("div", { class: "warn" }, `Could not read the log directory: ${err.message}`));
       return;
     }
+    logDir = data.logDir;
     const json = JSON.stringify(data.sessions);
     if (json === lastJson) return;
     lastJson = json;
@@ -118,7 +164,8 @@ async function homePage() {
           h("h3", null, `session ${sess.id.slice(0, 8)}`),
           h("span", { class: "muted", style: { fontSize: "13px" } }, when),
           h("span", { class: `chip harness-${sess.supported ? sess.provider : "unknown"}` }, sess.harness ?? sess.provider),
-          sess.supported ? null : h("span", { class: "muted", style: { fontSize: "12px" } }, "the visualizer does not understand this provider yet")),
+          sess.supported ? null : h("span", { class: "muted", style: { fontSize: "12px" } }, "the visualizer does not understand this provider yet"),
+          h("button", { class: "btn danger session-del", title: "Delete this session from the log directory", onclick: () => deleteSession(sess) }, "Delete")),
         h("div", { class: "turns" }, sess.turns.map((t) => h("a", {
           class: "turn-card" + (sess.supported ? "" : " disabled"),
           href: `#/turn/${encodeURIComponent(sess.dir)}/${encodeURIComponent(t.dir)}`,

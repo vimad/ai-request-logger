@@ -1,8 +1,9 @@
 # Agent X-Ray: the visualizer
 
 An animated, clickable replay of one captured turn, built for **teaching how a
-coding agent works**. It reads the log tree and nothing else, never writes to
-it, and has no dependencies or build step.
+coding agent works**. It reads the log tree and nothing else, and has no
+dependencies or build step. The one change it ever makes there is deleting a
+whole session, from the **Delete** button on its card (see below).
 
 ```bash
 npm start                                      # terminal 1: every proxy + http://127.0.0.1:8790
@@ -17,6 +18,15 @@ terminal banner prints): one tab per harness with its setup note and
 copy-paste commands. It opens on its own while nothing has been captured.
 
 The home page polls the log directory, so turns show up as you capture them.
+Each session card has a **Delete** button in its top-right corner. After a
+confirmation it removes that session's directory from the log tree for good
+(`DELETE /api/session?session=<dir>`). The server only accepts a single
+directory name that holds a `session.json`, and only with the `DELETE`
+method, so another web page can't trigger it without a CORS preflight, which
+the server never answers. Deleting a session that is still capturing doesn't
+stop it: the proxy recreates the directory on its next request, and the
+session comes back holding only what was captured after the delete.
+
 A turn page that is still growing offers a reload instead of rebuilding under
 you mid-explanation.
 
@@ -81,7 +91,7 @@ and every request that carried it.
 
 ```
 src/viz/
-  server.ts      static files + /api/sessions, /api/turn, /api/raw
+  server.ts      static files + /api/sessions, /api/turn, /api/raw, DELETE /api/session
   model.ts       the VizTurn shape, the blob store, the VizAdapter interface
   digest.ts      one turn directory → the model the page draws (shared)
   claude.ts      Claude Code adapter: Messages API requests → blobs

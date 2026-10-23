@@ -132,6 +132,8 @@ h1, h2, h3, h4 { line-height: 1.2; margin: 0; }
 .icon-btn:hover, .btn:hover { border-color: var(--accent); }
 .icon-btn:active, .btn:active { transform: translateY(1px); }
 .btn.primary { background: color-mix(in srgb, var(--accent) 18%, var(--panel)); border-color: var(--accent); }
+.btn.danger { color: var(--c-error); border-color: color-mix(in srgb, var(--c-error) 45%, var(--line-2)); }
+.btn.danger:hover { background: color-mix(in srgb, var(--c-error) 14%, var(--panel)); border-color: var(--c-error); }
 .btn.on { background: color-mix(in srgb, var(--accent) 22%, var(--panel)); border-color: var(--accent); }
 
 main { max-width: 1480px; margin: 0 auto; padding: 22px 22px 120px; }
@@ -234,6 +236,7 @@ main { max-width: 1480px; margin: 0 auto; padding: 22px 22px 120px; }
 .sessions { display: grid; gap: 18px; margin-top: 26px; }
 .session { padding: 16px 18px; }
 .session-head { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; margin-bottom: 10px; }
+.session-del { margin-left: auto; align-self: center; font-size: 12px; padding: 4px 10px; }
 .session-head h3 { font: 600 14px var(--mono); color: var(--muted); }
 .turns { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
 .turn-card {
@@ -570,6 +573,9 @@ table.t tr.hl td { background: color-mix(in srgb, var(--c-reminder) 8%, transpar
 .help dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 18px; margin: 14px 0 18px; }
 .help dt { font: 700 12px var(--mono); background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 6px; padding: 2px 8px; text-align: center; }
 .help dd { margin: 0; color: var(--muted); }
+.confirm .help-card { max-width: 480px; }
+.confirm p { margin: 10px 0 18px; word-break: break-all; }
+.confirm-actions { display: flex; gap: 10px; justify-content: flex-end; }
 
 /* ------------------------------------------------------------ presenting */
 

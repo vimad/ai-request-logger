@@ -3,11 +3,12 @@
  *
  * Started by `npm start` (src/index.ts) next to the proxies. Serves a static
  * single-page app from `public/` and a small JSON API that digests the log
- * tree on demand. Read-only: nothing here ever writes to the
- * log directory. It re-reads the tree on every request, so turns captured
+ * tree on demand. It never writes to the log directory; the one thing it
+ * changes there is deleting a whole session on request
+ * (`DELETE /api/session`). It re-reads the tree on every request, so turns captured
  * while it runs show up without a restart.
  */
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { createReadStream, existsSync, rmSync, statSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { extname, join, resolve, sep } from "node:path";
 import { gzipSync } from "node:zlib";
@@ -72,6 +73,25 @@ export function createVizServer(logDir: string, opts: VizOptions = {}) {
     try {
       if (url.pathname === "/api/sessions") {
         sendJson(req, res, 200, { logDir: root, sessions: listSessions(root) });
+        return;
+      }
+
+      // DELETE only: a cross-origin page cannot send one without a CORS
+      // preflight, which this server never answers.
+      if (url.pathname === "/api/session") {
+        if (req.method !== "DELETE") {
+          res.writeHead(405, { allow: "DELETE", "content-type": "text/plain" });
+          res.end("Method not allowed");
+          return;
+        }
+        const session = safeName(url.searchParams.get("session"));
+        const dir = session ? inside(root, session) : undefined;
+        if (!dir || dir === root || !existsSync(join(dir, "session.json"))) {
+          sendJson(req, res, 404, { error: "No such session" });
+          return;
+        }
+        rmSync(dir, { recursive: true, force: true });
+        sendJson(req, res, 200, { deleted: session });
         return;
       }
 

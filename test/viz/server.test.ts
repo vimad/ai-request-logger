@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import type { Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { createVizServer } from "../../src/viz/server.ts";
 
-describe("viz server: read-only and confined to the log directory", () => {
+describe("viz server: confined to the log directory", () => {
   let root: string;
   let server: Server;
   let base: string;
@@ -19,6 +19,8 @@ describe("viz server: read-only and confined to the log directory", () => {
     writeFileSync(join(logDir, "s1", "session.json"), JSON.stringify({ session: "s1", provider: "claude" }));
     writeFileSync(join(logDir, "s1", "turn-001__hi", "turn.json"), JSON.stringify({ turn: 1, label: "hi", requests: [] }));
     writeFileSync(join(req, "request.json"), JSON.stringify({ at: "2026-01-01T00:00:00Z", request: 1, shape: { kind: "main" }, body: { messages: [] } }));
+    mkdirSync(join(logDir, "s2", "turn-001__bye"), { recursive: true });
+    writeFileSync(join(logDir, "s2", "session.json"), JSON.stringify({ session: "s2", provider: "claude" }));
     // A file just outside the log directory that must never be served.
     writeFileSync(join(root, "secret.json"), "{}");
 
@@ -38,7 +40,7 @@ describe("viz server: read-only and confined to the log directory", () => {
     assert.equal(page.status, 200);
     assert.match(await page.text(), /Agent X-Ray/);
     const list: any = await (await fetch(base + "/api/sessions")).json();
-    assert.equal(list.sessions[0].turns[0].dir, "turn-001__hi");
+    assert.equal(list.sessions.find((s: any) => s.dir === "s1").turns[0].dir, "turn-001__hi");
   });
 
   it("digests a turn and serves its raw files", async () => {
@@ -62,5 +64,29 @@ describe("viz server: read-only and confined to the log directory", () => {
       const res = await fetch(base + path);
       assert.equal(res.status, 404, path);
     }
+  });
+
+  it("deletes a session directory, and only on DELETE", async () => {
+    const s2 = join(root, "log", "s2");
+    for (const method of ["GET", "POST"]) {
+      const res = await fetch(`${base}/api/session?session=s2`, { method });
+      assert.equal(res.status, 405, method);
+    }
+    assert.ok(existsSync(s2));
+    const res = await fetch(`${base}/api/session?session=s2`, { method: "DELETE" });
+    assert.equal(res.status, 200);
+    assert.ok(!existsSync(s2));
+    const list: any = await (await fetch(base + "/api/sessions")).json();
+    assert.deepEqual(list.sessions.map((s: any) => s.dir), ["s1"]);
+  });
+
+  it("refuses to delete anything that is not a session", async () => {
+    const attempts = ["..", ".", "", "s1%2F..", "s1%2Fturn-001__hi", "nope"];
+    for (const name of attempts) {
+      const res = await fetch(`${base}/api/session?session=${name}`, { method: "DELETE" });
+      assert.equal(res.status, 404, name);
+    }
+    assert.ok(existsSync(join(root, "log", "s1", "session.json")));
+    assert.ok(existsSync(join(root, "secret.json")));
   });
 });
